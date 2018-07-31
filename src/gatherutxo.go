@@ -6,10 +6,14 @@ import (
 	"github.com/ybbus/jsonrpc"
 	"strconv"
 	"time"
+	"encoding/hex"
+	"bytes"
+	"io"
+	block "github.com/mutalisk999/bitcoin-lib/src/block"
 )
 
 func doHttpJsonRpcCallType1(method string, args ...interface{}) (*jsonrpc.RPCResponse, error) {
-	rpcClient := jsonrpc.NewClient("")
+	rpcClient := jsonrpc.NewClient("http://test:test@192.168.1.107:30011")
 	rpcResponse, err := rpcClient.Call(method, args)
 	if err != nil {
 		return nil, err
@@ -125,7 +129,24 @@ func getStartBlockHeight() (uint32, error) {
 	return startBlockHeight, nil
 }
 
-func dealWithRawBlock(rawBlockData string) error {
+func storeStartBlockHeight(blockHeight uint32) error {
+	err := globalConfigDBMgr.DBPut("blockHeight", strconv.Itoa(int(blockHeight)))
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func dealWithRawBlock(rawBlockData *string) error {
+	blockBytes, err := hex.DecodeString(*rawBlockData)
+	if err != nil {
+		return err
+	}
+	bytesBuf := bytes.NewBuffer(blockBytes)
+	bufReader := io.Reader(bytesBuf)
+	block := new(block.Block)
+	block.UnPack(bufReader)
+	fmt.Println("block:", block)
 	return nil
 }
 
@@ -168,11 +189,17 @@ func doGatherUtxoType1(goroutine goroutine_mgr.Goroutine, args ...interface{}) {
 					quitFlag = true
 					break
 				}
-				err = dealWithRawBlock(rawBlockData)
+				err = dealWithRawBlock(&rawBlockData)
 				if err != nil {
 					quitFlag = true
 					break
 				}
+				err = storeStartBlockHeight(NewBlockHeight)
+				if err != nil {
+					quitFlag = true
+					break
+				}
+				startBlockHeight += 1
 			}
 			// if break from the inside loop for, break from the outside loop for
 			if quitFlag == true {
@@ -222,7 +249,7 @@ func doGatherUtxoType2(goroutine goroutine_mgr.Goroutine, args ...interface{}) {
 					quitFlag = true
 					break
 				}
-				err = dealWithRawBlock(rawBlockData)
+				err = dealWithRawBlock(&rawBlockData)
 				if err != nil {
 					quitFlag = true
 					break

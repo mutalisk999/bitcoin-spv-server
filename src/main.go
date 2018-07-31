@@ -3,6 +3,10 @@ package main
 import (
 	"errors"
 	"github.com/mutalisk999/go-lib/src/sched/goroutine_mgr"
+	"bufio"
+	"os"
+	"strings"
+	"fmt"
 )
 
 var goroutineMgr *goroutine_mgr.GoroutineManager
@@ -63,6 +67,41 @@ func appRun() error {
 }
 
 func appCmd() error {
+	var stdinReader *bufio.Reader
+	stdinReader = bufio.NewReader(os.Stdin)
+	var stdoutWriter *bufio.Writer
+	stdoutWriter = bufio.NewWriter(os.Stdout)
+	for {
+		_, err := stdoutWriter.WriteString(">>>")
+		if err != nil {
+			quitFlag = true
+			break
+		}
+		stdoutWriter.Flush()
+		strLine, err := stdinReader.ReadString('\n')
+		if err != nil {
+			quitFlag = true
+			break
+		}
+		strLine = strings.Trim(strLine, "\x0a")
+		strLine = strings.Trim(strLine, "\x0d")
+		strLine = strings.TrimLeft(strLine, " ")
+		strLine = strings.TrimRight(strLine, " ")
+
+		if strLine == "" {
+		} else if strLine == "stop" || strLine == "quit" || strLine == "exit" {
+			quitFlag = true
+			break
+		} else {
+			fmt.Println("not support command: ", strLine)
+		}
+	}
+	<-quitChan
+
+	// sync and close
+	globalConfigDBMgr.DBClose()
+	addressTrxDBMgr.DBClose()
+	trxUtxoDBMgr.DBClose()
 
 	return nil
 }
