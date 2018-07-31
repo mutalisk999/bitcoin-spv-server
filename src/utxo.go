@@ -39,6 +39,7 @@ func (u *UtxoSource) UnPack(reader io.Reader) error {
 
 type UtxoDetail struct {
 	Amount       int64
+	Height		 uint32
 	Address      string
 	ScriptPubKey script.Script
 	Status       byte
@@ -46,6 +47,10 @@ type UtxoDetail struct {
 
 func (u UtxoDetail) Pack(writer io.Writer) error {
 	err := serialize.PackInt64(writer, u.Amount)
+	if err != nil {
+		return err
+	}
+	err = serialize.PackUint32(writer, u.Height)
 	if err != nil {
 		return err
 	}
@@ -69,6 +74,10 @@ func (u UtxoDetail) Pack(writer io.Writer) error {
 func (u *UtxoDetail) UnPack(reader io.Reader) error {
 	var err error
 	u.Amount, err = serialize.UnPackInt64(reader)
+	if err != nil {
+		return err
+	}
+	u.Height, err = serialize.UnPackUint32(reader)
 	if err != nil {
 		return err
 	}
