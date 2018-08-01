@@ -205,7 +205,7 @@ func dealWithVinToCache(blockCache *BlockCache, vin transaction.TxIn, trxId bigi
 	return nil
 }
 
-func dealWithVoutToCache(blockCache *BlockCache, vout transaction.TxOut, trxId bigint.Uint256) error {
+func dealWithVoutToCache(blockCache *BlockCache, vout transaction.TxOut, trxId bigint.Uint256, index uint32) error {
 	return nil
 }
 
@@ -222,10 +222,12 @@ func dealWithTrxToCache(blockCache *BlockCache, trx *transaction.Transaction, is
 			}
 		}
 	}
-	for _, vout := range trx.Vout {
-		err := dealWithVoutToCache(blockCache, vout, trxId)
-		if err != nil {
-			return err
+	for index, vout := range trx.Vout {
+		if vout.Value != 0 {
+			err := dealWithVoutToCache(blockCache, vout, trxId, uint32(index))
+			if err != nil {
+				return err
+			}
 		}
 	}
 	return nil
