@@ -1,15 +1,20 @@
 package main
 
 import (
+	"bytes"
+	"encoding/hex"
+	"errors"
 	"fmt"
+	"github.com/mutalisk999/bitcoin-lib/src/bigint"
+	block "github.com/mutalisk999/bitcoin-lib/src/block"
+	"github.com/mutalisk999/bitcoin-lib/src/script"
+	"github.com/mutalisk999/bitcoin-lib/src/transaction"
 	"github.com/mutalisk999/go-lib/src/sched/goroutine_mgr"
 	"github.com/ybbus/jsonrpc"
-	"strconv"
-	"time"
-	"encoding/hex"
-	"bytes"
 	"io"
-	block "github.com/mutalisk999/bitcoin-lib/src/block"
+	"strconv"
+	"strings"
+	"time"
 )
 
 func doHttpJsonRpcCallType1(method string, args ...interface{}) (*jsonrpc.RPCResponse, error) {
@@ -137,16 +142,115 @@ func storeStartBlockHeight(blockHeight uint32) error {
 	return nil
 }
 
-func dealWithRawBlock(rawBlockData *string) error {
+func dealWithVinToCache(blockCache *BlockCache, vin transaction.TxIn, trxId bigint.Uint256) error {
+	lastVoutInCache := false
+	var scriptPubKey script.Script
+	// deal trx utxo pair
+	for i := 0; i < len(blockCache.TrxUtxos); i++ {
+		if bigint.IsUint256Equal(&vin.PrevOut.Hash, &blockCache.TrxUtxos[i].TrxUtxoKey.TrxId) && vin.PrevOut.N == blockCache.TrxUtxos[i].TrxUtxoKey.Vout {
+			if blockCache.TrxUtxos[i].TrxUtxoValue.Status != 0 {
+				return errors.New("invalid utxo status, and utxo status must be unspent")
+			}
+			blockCache.TrxUtxos[i].TrxUtxoValue.Status = 1
+			scriptPubKey = blockCache.TrxUtxos[i].TrxUtxoValue.ScriptPubKey
+			lastVoutInCache = true
+			break
+		}
+	}
+	if !lastVoutInCache {
+		utxoSource := UtxoSource{vin.PrevOut.Hash, vin.PrevOut.N}
+		utxoDetail, err := trxUtxoDBMgr.DBGet(utxoSource)
+		if err != nil {
+			return errors.New("can not find prevout trxid: " + vin.PrevOut.Hash.GetHex() + ", vout: " + strconv.Itoa(int(vin.PrevOut.N)))
+		}
+		scriptPubKey = utxoDetail.ScriptPubKey
+		trxUtxoPair := new(TrxUtxoPair)
+		trxUtxoPair.TrxUtxoKey = utxoSource
+		utxoDetail.Status = 1
+		trxUtxoPair.TrxUtxoValue = utxoDetail
+		trxUtxoPair.TrxUtxoOp = 0
+		blockCache.AddTrxUtxoPair(*trxUtxoPair)
+	}
+	// deal address trx pair
+	isSucc, scriptType, addresses := script.ExtractDestination(scriptPubKey)
+	if isSucc {
+		addrStr := ""
+		if script.IsSingleAddress(scriptType) {
+			addrStr = addresses[0]
+		} else if script.IsMultiAddress(scriptType) {
+			addrStr = strings.Join(addresses, ",")
+		}
+		if addrStr != "" {
+			addressInCache := false
+			for i := 0; i < len(blockCache.AddressTrxs); i++ {
+				if blockCache.AddressTrxs[i].AddressTrxKey == addrStr {
+					blockCache.AddressTrxs[i].AddressTrxValue[trxId] = 0
+					addressInCache = true
+					break
+				}
+			}
+			if !addressInCache {
+				addrTrxPair := AddressTrxPair{}
+				trxIds, err := addressTrxDBMgr.DBGet(addrStr)
+				if err != nil {
+					addrTrxPair = AddressTrxPair{addrStr, map[bigint.Uint256]int{trxId: 0}, 0}
+				} else {
+					trxIds[trxId] = 0
+					addrTrxPair = AddressTrxPair{addrStr, trxIds, 0}
+				}
+				blockCache.AddressTrxs = append(blockCache.AddressTrxs, addrTrxPair)
+			}
+		}
+	}
+	return nil
+}
+
+func dealWithVoutToCache(blockCache *BlockCache, vout transaction.TxOut, trxId bigint.Uint256) error {
+	return nil
+}
+
+func dealWithTrxToCache(blockCache *BlockCache, trx *transaction.Transaction, isCoinBase bool) error {
+	trxId, err := trx.CalcTrxId()
+	if err != nil {
+		return err
+	}
+	if !isCoinBase {
+		for _, vin := range trx.Vin {
+			err := dealWithVinToCache(blockCache, vin, trxId)
+			if err != nil {
+				return err
+			}
+		}
+	}
+	for _, vout := range trx.Vout {
+		err := dealWithVoutToCache(blockCache, vout, trxId)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func dealWithRawBlock(blockHeight uint32, rawBlockData *string) error {
 	blockBytes, err := hex.DecodeString(*rawBlockData)
 	if err != nil {
 		return err
 	}
 	bytesBuf := bytes.NewBuffer(blockBytes)
 	bufReader := io.Reader(bytesBuf)
-	block := new(block.Block)
-	block.UnPack(bufReader)
-	fmt.Println("block:", block)
+	blockNew := new(block.Block)
+	blockNew.UnPack(bufReader)
+	blockCache := new(BlockCache)
+	for i := 0; i < len(blockNew.Vtx); i++ {
+		isCoinBase := false
+		if i == 0 {
+			isCoinBase = true
+		}
+		err = dealWithTrxToCache(blockCache, &blockNew.Vtx[i], isCoinBase)
+		if err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
@@ -189,7 +293,7 @@ func doGatherUtxoType1(goroutine goroutine_mgr.Goroutine, args ...interface{}) {
 					quitFlag = true
 					break
 				}
-				err = dealWithRawBlock(&rawBlockData)
+				err = dealWithRawBlock(NewBlockHeight, &rawBlockData)
 				if err != nil {
 					quitFlag = true
 					break
@@ -249,7 +353,7 @@ func doGatherUtxoType2(goroutine goroutine_mgr.Goroutine, args ...interface{}) {
 					quitFlag = true
 					break
 				}
-				err = dealWithRawBlock(&rawBlockData)
+				err = dealWithRawBlock(NewBlockHeight, &rawBlockData)
 				if err != nil {
 					quitFlag = true
 					break

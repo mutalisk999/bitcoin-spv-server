@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"errors"
+	"github.com/mutalisk999/bitcoin-lib/src/bigint"
 	"github.com/mutalisk999/bitcoin-lib/src/serialize"
 	"github.com/syndtr/goleveldb/leveldb"
 	"io"
@@ -24,8 +25,8 @@ type AddressTrxDBMgr struct {
 
 type AddressTrxPair struct {
 	AddressTrxKey   string
-	AddressTrxValue []UtxoSource
-	AddressTrxOp    byte // 0 put, 1 delete
+	AddressTrxValue map[bigint.Uint256]int // only use key
+	AddressTrxOp    byte                   // 0 put, 1 delete
 }
 
 type TrxUtxoDBMgr struct {
@@ -114,15 +115,16 @@ func (a *AddressTrxDBMgr) DBClose() error {
 	return nil
 }
 
-func utxoSrcsToBytes(utxoSrcs []UtxoSource) ([]byte, error) {
+func trxIdsToBytes(trxIds map[bigint.Uint256]int) ([]byte, error) {
 	bytesBuf := bytes.NewBuffer([]byte{})
 	bufWriter := io.Writer(bytesBuf)
-	err := serialize.PackCompactSize(bufWriter, uint64(len(utxoSrcs)))
+	err := serialize.PackCompactSize(bufWriter, uint64(len(trxIds)))
 	if err != nil {
 		return []byte{}, err
 	}
-	for _, utxoSrc := range utxoSrcs {
-		err = utxoSrc.Pack(bufWriter)
+	// just pack key only
+	for trxId, _ := range trxIds {
+		err = trxId.Pack(bufWriter)
 		if err != nil {
 			return []byte{}, err
 		}
@@ -130,26 +132,27 @@ func utxoSrcsToBytes(utxoSrcs []UtxoSource) ([]byte, error) {
 	return bytesBuf.Bytes(), nil
 }
 
-func utxoSrcsFromBytes(bytesUtxoSrcs []byte) ([]UtxoSource, error) {
-	var utxoSrcs []UtxoSource
-	bufReader := io.Reader(bytes.NewBuffer(bytesUtxoSrcs))
+func trxIdsFromBytes(bytesTrxIds []byte) (map[bigint.Uint256]int, error) {
+	trxIds := make(map[bigint.Uint256]int)
+	bufReader := io.Reader(bytes.NewBuffer(bytesTrxIds))
 	ui64, err := serialize.UnPackCompactSize(bufReader)
 	if err != nil {
-		return []UtxoSource{}, err
+		return map[bigint.Uint256]int{}, err
 	}
 	for i := 0; i < int(ui64); i++ {
-		var utxoSrc UtxoSource
-		err = utxoSrc.UnPack(bufReader)
+		var trxId bigint.Uint256
+		err = trxId.UnPack(bufReader)
 		if err != nil {
-			return []UtxoSource{}, err
+			return map[bigint.Uint256]int{}, err
 		}
-		utxoSrcs = append(utxoSrcs, utxoSrc)
+		// value is no use
+		trxIds[trxId] = 0
 	}
-	return utxoSrcs, nil
+	return trxIds, nil
 }
 
-func (a AddressTrxDBMgr) DBPut(key string, value []UtxoSource) error {
-	bytesValue, err := utxoSrcsToBytes(value)
+func (a AddressTrxDBMgr) DBPut(key string, value map[bigint.Uint256]int) error {
+	bytesValue, err := trxIdsToBytes(value)
 	if err != nil {
 		return err
 	}
@@ -160,13 +163,13 @@ func (a AddressTrxDBMgr) DBPut(key string, value []UtxoSource) error {
 	return nil
 }
 
-func (a AddressTrxDBMgr) DBGet(key string) ([]UtxoSource, error) {
+func (a AddressTrxDBMgr) DBGet(key string) (map[bigint.Uint256]int, error) {
 	bytesValue, err := a.db.Get([]byte(key), nil)
 	if err != nil {
-		return []UtxoSource{}, err
+		return map[bigint.Uint256]int{}, err
 	}
-	utxoSrcs, err := utxoSrcsFromBytes(bytesValue)
-	return utxoSrcs, nil
+	trxIds, err := trxIdsFromBytes(bytesValue)
+	return trxIds, nil
 }
 
 func (a AddressTrxDBMgr) DBDelete(key string) error {
@@ -181,7 +184,7 @@ func (a AddressTrxDBMgr) DBBatch(addressTrxs []AddressTrxPair) error {
 	batch := new(leveldb.Batch)
 	for _, addressTrx := range addressTrxs {
 		if addressTrx.AddressTrxOp == 0 {
-			bytesValue, err := utxoSrcsToBytes(addressTrx.AddressTrxValue)
+			bytesValue, err := trxIdsToBytes(addressTrx.AddressTrxValue)
 			if err != nil {
 				return err
 			}

@@ -10,7 +10,7 @@ import (
 
 type UtxoSource struct {
 	TrxId bigint.Uint256
-	Vout  int32
+	Vout  uint32
 }
 
 func (u UtxoSource) Pack(writer io.Writer) error {
@@ -18,7 +18,7 @@ func (u UtxoSource) Pack(writer io.Writer) error {
 	if err != nil {
 		return err
 	}
-	err = serialize.PackInt32(writer, u.Vout)
+	err = serialize.PackUint32(writer, u.Vout)
 	if err != nil {
 		return err
 	}
@@ -30,7 +30,7 @@ func (u *UtxoSource) UnPack(reader io.Reader) error {
 	if err != nil {
 		return err
 	}
-	u.Vout, err = serialize.UnPackInt32(reader)
+	u.Vout, err = serialize.UnPackUint32(reader)
 	if err != nil {
 		return err
 	}
@@ -39,10 +39,10 @@ func (u *UtxoSource) UnPack(reader io.Reader) error {
 
 type UtxoDetail struct {
 	Amount       int64
-	Height		 uint32
+	Height       uint32
 	Address      string
 	ScriptPubKey script.Script
-	Status       byte
+	Status       byte // 0 valid     1 has spent
 }
 
 func (u UtxoDetail) Pack(writer io.Writer) error {

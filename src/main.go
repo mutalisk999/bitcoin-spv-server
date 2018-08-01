@@ -1,12 +1,12 @@
 package main
 
 import (
-	"errors"
-	"github.com/mutalisk999/go-lib/src/sched/goroutine_mgr"
 	"bufio"
+	"errors"
+	"fmt"
+	"github.com/mutalisk999/go-lib/src/sched/goroutine_mgr"
 	"os"
 	"strings"
-	"fmt"
 )
 
 var goroutineMgr *goroutine_mgr.GoroutineManager
