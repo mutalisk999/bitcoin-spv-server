@@ -6,7 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/mutalisk999/bitcoin-lib/src/bigint"
-	block "github.com/mutalisk999/bitcoin-lib/src/block"
+	"github.com/mutalisk999/bitcoin-lib/src/block"
 	"github.com/mutalisk999/bitcoin-lib/src/script"
 	"github.com/mutalisk999/bitcoin-lib/src/transaction"
 	"github.com/mutalisk999/go-lib/src/sched/goroutine_mgr"
@@ -29,7 +29,7 @@ func doHttpJsonRpcCallType1(method string, args ...interface{}) (*jsonrpc.RPCRes
 func getBlockCountRpcType1() (uint32, error) {
 	rpcResponse, err := doHttpJsonRpcCallType1("getblockcount")
 	if err != nil {
-		fmt.Println("doHttpJsonRpcCall Failed: ", err)
+		fmt.Println("getBlockCountRpcType1 Failed: ", err)
 		return 0, err
 	}
 	blockCount, err := rpcResponse.GetInt()
@@ -43,7 +43,7 @@ func getBlockCountRpcType1() (uint32, error) {
 func getBlockHashRpcType1(blockHeight uint32) (string, error) {
 	rpcResponse, err := doHttpJsonRpcCallType1("getblockhash", blockHeight)
 	if err != nil {
-		fmt.Println("doHttpJsonRpcCall Failed: ", err)
+		fmt.Println("getBlockCountRpcType1 Failed: ", err)
 		return "", err
 	}
 	blockHash, err := rpcResponse.GetString()
@@ -57,7 +57,7 @@ func getBlockHashRpcType1(blockHeight uint32) (string, error) {
 func getRawBlockType1(blockHash string) (string, error) {
 	rpcResponse, err := doHttpJsonRpcCallType1("getblock", blockHash, 0)
 	if err != nil {
-		fmt.Println("doHttpJsonRpcCall Failed: ", err)
+		fmt.Println("getBlockCountRpcType1 Failed: ", err)
 		return "", err
 	}
 	rawBlockHex, err := rpcResponse.GetString()
@@ -69,7 +69,7 @@ func getRawBlockType1(blockHash string) (string, error) {
 }
 
 func doHttpJsonRpcCallType2(method string, args ...interface{}) (*jsonrpc.RPCResponse, error) {
-	rpcClient := jsonrpc.NewClient("")
+	rpcClient := jsonrpc.NewClient("http://192.168.1.107:38080")
 	rpcResponse, err := rpcClient.Call(method, args)
 	if err != nil {
 		return nil, err
@@ -78,9 +78,9 @@ func doHttpJsonRpcCallType2(method string, args ...interface{}) (*jsonrpc.RPCRes
 }
 
 func getBlockCountRpcType2() (uint32, error) {
-	rpcResponse, err := doHttpJsonRpcCallType2("GetBlockCount")
+	rpcResponse, err := doHttpJsonRpcCallType2("Service.GetBlockCount", nil)
 	if err != nil {
-		fmt.Println("doHttpJsonRpcCall Failed: ", err)
+		fmt.Println("doHttpJsonRpcCallType2 Failed: ", err)
 		return 0, err
 	}
 	blockCount, err := rpcResponse.GetInt()
@@ -92,9 +92,9 @@ func getBlockCountRpcType2() (uint32, error) {
 }
 
 func getBlockHashRpcType2(blockHeight uint32) (string, error) {
-	rpcResponse, err := doHttpJsonRpcCallType2("GetBlockHash", blockHeight)
+	rpcResponse, err := doHttpJsonRpcCallType2("Service.GetBlockHash", blockHeight)
 	if err != nil {
-		fmt.Println("doHttpJsonRpcCall Failed: ", err)
+		fmt.Println("doHttpJsonRpcCallType2 Failed: ", err)
 		return "", err
 	}
 	blockHash, err := rpcResponse.GetString()
@@ -106,9 +106,9 @@ func getBlockHashRpcType2(blockHeight uint32) (string, error) {
 }
 
 func getRawBlockType2(blockHash string) (string, error) {
-	rpcResponse, err := doHttpJsonRpcCallType2("GetRawBlock", blockHash)
+	rpcResponse, err := doHttpJsonRpcCallType2("Service.GetRawBlock", blockHash)
 	if err != nil {
-		fmt.Println("doHttpJsonRpcCall Failed: ", err)
+		fmt.Println("doHttpJsonRpcCallType2 Failed: ", err)
 		return "", err
 	}
 	rawBlockHex, err := rpcResponse.GetString()
@@ -211,7 +211,7 @@ func dealWithVinToCache(blockCache *BlockCache, vin transaction.TxIn, trxId bigi
 					trxIds[trxId.GetHex()] = 0
 					addrTrxPair = AddressTrxPair{addrStr, trxIds, 0}
 				}
-				blockCache.AddressTrxs = append(blockCache.AddressTrxs, addrTrxPair)
+				blockCache.AddAddressTrxPair(addrTrxPair)
 			}
 		}
 	}
@@ -249,7 +249,7 @@ func dealWithVoutToCache(blockHeight uint32, blockCache *BlockCache, vout transa
 					trxIds[trxId.GetHex()] = 0
 					addrTrxPair = AddressTrxPair{addrStr, trxIds, 0}
 				}
-				blockCache.AddressTrxs = append(blockCache.AddressTrxs, addrTrxPair)
+				blockCache.AddAddressTrxPair(addrTrxPair)
 			}
 		}
 	}
@@ -284,11 +284,9 @@ func dealWithTrxToCache(blockHeight uint32, blockCache *BlockCache, trx *transac
 		}
 	}
 	for index, vout := range trx.Vout {
-		if vout.Value != 0 {
-			err := dealWithVoutToCache(blockHeight, blockCache, vout, trxId, uint32(index))
-			if err != nil {
-				return err
-			}
+		err := dealWithVoutToCache(blockHeight, blockCache, vout, trxId, uint32(index))
+		if err != nil {
+			return err
 		}
 	}
 	return nil
@@ -320,12 +318,14 @@ func dealWithRawBlock(blockHeight uint32, rawBlockData *string) (*BlockCache, er
 func doGatherUtxoType1(goroutine goroutine_mgr.Goroutine, args ...interface{}) {
 	defer goroutine.OnQuit()
 	var err error
+
+	startBlockHeight, err = getStartBlockHeight()
+	if err != nil {
+		return
+	}
+
 	for {
 		if quitFlag {
-			break
-		}
-		startBlockHeight, err = getStartBlockHeight()
-		if err != nil {
 			break
 		}
 
@@ -386,12 +386,14 @@ func doGatherUtxoType1(goroutine goroutine_mgr.Goroutine, args ...interface{}) {
 func doGatherUtxoType2(goroutine goroutine_mgr.Goroutine, args ...interface{}) {
 	defer goroutine.OnQuit()
 	var err error
+
+	startBlockHeight, err = getStartBlockHeight()
+	if err != nil {
+		return
+	}
+
 	for {
 		if quitFlag {
-			break
-		}
-		startBlockHeight, err = getStartBlockHeight()
-		if err != nil {
 			break
 		}
 
@@ -438,6 +440,7 @@ func doGatherUtxoType2(goroutine goroutine_mgr.Goroutine, args ...interface{}) {
 					quitFlag = true
 					break
 				}
+				startBlockHeight += 1
 			}
 			// if break from the inside loop for, break from the outside loop for
 			if quitFlag == true {

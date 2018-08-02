@@ -14,15 +14,17 @@ var globalConfigDBMgr *GlobalConfigDBMgr
 var addressTrxDBMgr *AddressTrxDBMgr
 var trxUtxoDBMgr *TrxUtxoDBMgr
 
-var dbPath string = "db/"
+var dbPath string = "F:/btc_spv_data/db"
 var quitFlag = false
 var quitChan chan byte
-var gatherType = 1
+var gatherType = 2
 
 var startBlockHeight uint32
 
 func appInit() error {
 	var err error
+	// init quit channel
+	quitChan = make(chan byte)
 
 	// init goroutine manager
 	goroutineMgr = new(goroutine_mgr.GoroutineManager)
@@ -30,21 +32,21 @@ func appInit() error {
 
 	// init global config db manager
 	globalConfigDBMgr = new(GlobalConfigDBMgr)
-	err = globalConfigDBMgr.DBOpen(dbPath + "global_config_db")
+	err = globalConfigDBMgr.DBOpen(dbPath + "/" + "global_config_db")
 	if err != nil {
 		return err
 	}
 
 	// init address trx db manager
 	addressTrxDBMgr = new(AddressTrxDBMgr)
-	err = addressTrxDBMgr.DBOpen(dbPath + "address_trx_db")
+	err = addressTrxDBMgr.DBOpen(dbPath + "/" + "address_trx_db")
 	if err != nil {
 		return err
 	}
 
 	// init trx utxo db manager
 	trxUtxoDBMgr = new(TrxUtxoDBMgr)
-	err = trxUtxoDBMgr.DBOpen(dbPath + "trx_utxo_db")
+	err = trxUtxoDBMgr.DBOpen(dbPath + "/" + "trx_utxo_db")
 	if err != nil {
 		return err
 	}
@@ -96,6 +98,8 @@ func appCmd() error {
 			break
 		} else if strLine == "getblockcount" {
 			fmt.Println(startBlockHeight)
+		} else if strLine == "goroutinestatus" {
+			goroutineMgr.GoroutineDump()
 		} else {
 			fmt.Println("not support command: ", strLine)
 		}
@@ -115,14 +119,17 @@ func main() {
 
 	err = appInit()
 	if err != nil {
+		fmt.Println("appInit", err)
 		return
 	}
 	err = appRun()
 	if err != nil {
+		fmt.Println("appRun", err)
 		return
 	}
 	err = appCmd()
 	if err != nil {
+		fmt.Println("appCmd", err)
 		return
 	}
 	return
