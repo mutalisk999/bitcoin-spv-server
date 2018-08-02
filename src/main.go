@@ -26,6 +26,9 @@ func appInit() error {
 	// init quit channel
 	quitChan = make(chan byte)
 
+	// init block cache
+	blockCache = new(BlockCache)
+
 	// init goroutine manager
 	goroutineMgr = new(goroutine_mgr.GoroutineManager)
 	goroutineMgr.Initialise("MainGoroutineManager")

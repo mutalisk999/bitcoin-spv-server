@@ -1,0 +1,20 @@
+{
+  "dbConfig":{
+    "dbDir":"db"
+  },
+  "cacheConfig":{
+    "blockCacheCount":200
+  },
+  "rpcClientConfig":{
+    "dataSource":"rawBlock",
+    "btcWallet": {
+      "rpcReqUrl":"http://test:test@192.168.1.107:30011"
+    },
+    "rawBlock": {
+      "rpcReqUrl":"http://192.168.1.107:38080"
+    }
+  },
+  "rpcServerConfig":{
+    "rpcListenEndPoint":"0.0.0.0:38090"
+  }
+}

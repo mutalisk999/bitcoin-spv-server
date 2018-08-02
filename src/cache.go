@@ -12,3 +12,5 @@ func (b *BlockCache) AddAddressTrxPair(addressTrxPair AddressTrxPair) {
 func (b *BlockCache) AddTrxUtxoPair(trxUtxoPair TrxUtxoPair) {
 	b.TrxUtxos = append(b.TrxUtxos, trxUtxoPair)
 }
+
+var blockCache *BlockCache

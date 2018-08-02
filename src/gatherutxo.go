@@ -154,7 +154,7 @@ func storeStartBlockHeight(blockHeight uint32) error {
 	return nil
 }
 
-func dealWithVinToCache(blockCache *BlockCache, vin transaction.TxIn, trxId bigint.Uint256) error {
+func dealWithVinToCache(vin transaction.TxIn, trxId bigint.Uint256) error {
 	lastVoutInCache := false
 	var scriptPubKey script.Script
 	// deal trx utxo pair
@@ -218,7 +218,7 @@ func dealWithVinToCache(blockCache *BlockCache, vin transaction.TxIn, trxId bigi
 	return nil
 }
 
-func dealWithVoutToCache(blockHeight uint32, blockCache *BlockCache, vout transaction.TxOut, trxId bigint.Uint256, index uint32) error {
+func dealWithVoutToCache(blockHeight uint32, vout transaction.TxOut, trxId bigint.Uint256, index uint32) error {
 	var scriptPubKey script.Script
 	var addrStr string
 
@@ -270,21 +270,21 @@ func dealWithVoutToCache(blockHeight uint32, blockCache *BlockCache, vout transa
 	return nil
 }
 
-func dealWithTrxToCache(blockHeight uint32, blockCache *BlockCache, trx *transaction.Transaction, isCoinBase bool) error {
+func dealWithTrxToCache(blockHeight uint32, trx *transaction.Transaction, isCoinBase bool) error {
 	trxId, err := trx.CalcTrxId()
 	if err != nil {
 		return err
 	}
 	if !isCoinBase {
 		for _, vin := range trx.Vin {
-			err := dealWithVinToCache(blockCache, vin, trxId)
+			err := dealWithVinToCache(vin, trxId)
 			if err != nil {
 				return err
 			}
 		}
 	}
 	for index, vout := range trx.Vout {
-		err := dealWithVoutToCache(blockHeight, blockCache, vout, trxId, uint32(index))
+		err := dealWithVoutToCache(blockHeight, vout, trxId, uint32(index))
 		if err != nil {
 			return err
 		}
@@ -292,27 +292,26 @@ func dealWithTrxToCache(blockHeight uint32, blockCache *BlockCache, trx *transac
 	return nil
 }
 
-func dealWithRawBlock(blockHeight uint32, rawBlockData *string) (*BlockCache, error) {
+func dealWithRawBlock(blockHeight uint32, rawBlockData *string) error {
 	blockBytes, err := hex.DecodeString(*rawBlockData)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	bytesBuf := bytes.NewBuffer(blockBytes)
 	bufReader := io.Reader(bytesBuf)
 	blockNew := new(block.Block)
 	blockNew.UnPack(bufReader)
-	blockCache := new(BlockCache)
 	for i := 0; i < len(blockNew.Vtx); i++ {
 		isCoinBase := false
 		if i == 0 {
 			isCoinBase = true
 		}
-		err = dealWithTrxToCache(blockHeight, blockCache, &blockNew.Vtx[i], isCoinBase)
+		err = dealWithTrxToCache(blockHeight, &blockNew.Vtx[i], isCoinBase)
 		if err != nil {
-			return nil, err
+			return err
 		}
 	}
-	return blockCache, nil
+	return nil
 }
 
 func doGatherUtxoType1(goroutine goroutine_mgr.Goroutine, args ...interface{}) {
@@ -357,23 +356,39 @@ func doGatherUtxoType1(goroutine goroutine_mgr.Goroutine, args ...interface{}) {
 					quitFlag = true
 					break
 				}
-				blockCache, err := dealWithRawBlock(NewBlockHeight, &rawBlockData)
+				err = dealWithRawBlock(NewBlockHeight, &rawBlockData)
 				if err != nil {
 					quitFlag = true
 					break
 				}
-				err = storeBlockCache(blockCache)
-				if err != nil {
-					quitFlag = true
-					break
-				}
-				err = storeStartBlockHeight(NewBlockHeight)
-				if err != nil {
-					quitFlag = true
-					break
+				if NewBlockHeight % 200 == 0 {
+					err = storeBlockCache(blockCache)
+					if err != nil {
+						quitFlag = true
+						break
+					}
+					err = storeStartBlockHeight(NewBlockHeight)
+					if err != nil {
+						quitFlag = true
+						break
+					}
+					blockCache = new(BlockCache)
 				}
 				startBlockHeight += 1
 			}
+			// need to flush block cache
+			err = storeBlockCache(blockCache)
+			if err != nil {
+				quitFlag = true
+				break
+			}
+			err = storeStartBlockHeight(startBlockHeight)
+			if err != nil {
+				quitFlag = true
+				break
+			}
+			blockCache = new(BlockCache)
+
 			// if break from the inside loop for, break from the outside loop for
 			if quitFlag == true {
 				break
@@ -425,23 +440,39 @@ func doGatherUtxoType2(goroutine goroutine_mgr.Goroutine, args ...interface{}) {
 					quitFlag = true
 					break
 				}
-				blockCache, err := dealWithRawBlock(NewBlockHeight, &rawBlockData)
+				err = dealWithRawBlock(NewBlockHeight, &rawBlockData)
 				if err != nil {
 					quitFlag = true
 					break
 				}
-				err = storeBlockCache(blockCache)
-				if err != nil {
-					quitFlag = true
-					break
-				}
-				err = storeStartBlockHeight(NewBlockHeight)
-				if err != nil {
-					quitFlag = true
-					break
+				if NewBlockHeight % 200 == 0 {
+					err = storeBlockCache(blockCache)
+					if err != nil {
+						quitFlag = true
+						break
+					}
+					err = storeStartBlockHeight(NewBlockHeight)
+					if err != nil {
+						quitFlag = true
+						break
+					}
+					blockCache = new(BlockCache)
 				}
 				startBlockHeight += 1
 			}
+			// need to flush block cache
+			err = storeBlockCache(blockCache)
+			if err != nil {
+				quitFlag = true
+				break
+			}
+			err = storeStartBlockHeight(startBlockHeight)
+			if err != nil {
+				quitFlag = true
+				break
+			}
+			blockCache = new(BlockCache)
+
 			// if break from the inside loop for, break from the outside loop for
 			if quitFlag == true {
 				break
