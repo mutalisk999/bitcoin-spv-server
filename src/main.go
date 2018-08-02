@@ -19,6 +19,8 @@ var quitFlag = false
 var quitChan chan byte
 var gatherType = 1
 
+var startBlockHeight uint32
+
 func appInit() error {
 	var err error
 
@@ -92,6 +94,8 @@ func appCmd() error {
 		} else if strLine == "stop" || strLine == "quit" || strLine == "exit" {
 			quitFlag = true
 			break
+		} else if strLine == "getblockcount" {
+			fmt.Println(startBlockHeight)
 		} else {
 			fmt.Println("not support command: ", strLine)
 		}

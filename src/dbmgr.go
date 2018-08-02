@@ -9,6 +9,8 @@ import (
 	"io"
 )
 
+var LevelDBNotFound = "leveldb: not found"
+
 type GlobalConfigDBMgr struct {
 	db *leveldb.DB
 }
@@ -25,8 +27,8 @@ type AddressTrxDBMgr struct {
 
 type AddressTrxPair struct {
 	AddressTrxKey   string
-	AddressTrxValue map[bigint.Uint256]int // only use key
-	AddressTrxOp    byte                   // 0 put, 1 delete
+	AddressTrxValue map[string]int // only use key
+	AddressTrxOp    byte           // 0 put, 1 delete
 }
 
 type TrxUtxoDBMgr struct {
@@ -115,7 +117,7 @@ func (a *AddressTrxDBMgr) DBClose() error {
 	return nil
 }
 
-func trxIdsToBytes(trxIds map[bigint.Uint256]int) ([]byte, error) {
+func trxIdsToBytes(trxIds map[string]int) ([]byte, error) {
 	bytesBuf := bytes.NewBuffer([]byte{})
 	bufWriter := io.Writer(bytesBuf)
 	err := serialize.PackCompactSize(bufWriter, uint64(len(trxIds)))
@@ -123,7 +125,9 @@ func trxIdsToBytes(trxIds map[bigint.Uint256]int) ([]byte, error) {
 		return []byte{}, err
 	}
 	// just pack key only
-	for trxId, _ := range trxIds {
+	for hexStr, _ := range trxIds {
+		trxId := new(bigint.Uint256)
+		trxId.SetHex(hexStr)
 		err = trxId.Pack(bufWriter)
 		if err != nil {
 			return []byte{}, err
@@ -132,26 +136,26 @@ func trxIdsToBytes(trxIds map[bigint.Uint256]int) ([]byte, error) {
 	return bytesBuf.Bytes(), nil
 }
 
-func trxIdsFromBytes(bytesTrxIds []byte) (map[bigint.Uint256]int, error) {
-	trxIds := make(map[bigint.Uint256]int)
+func trxIdsFromBytes(bytesTrxIds []byte) (map[string]int, error) {
+	trxIds := make(map[string]int)
 	bufReader := io.Reader(bytes.NewBuffer(bytesTrxIds))
 	ui64, err := serialize.UnPackCompactSize(bufReader)
 	if err != nil {
-		return map[bigint.Uint256]int{}, err
+		return map[string]int{}, err
 	}
 	for i := 0; i < int(ui64); i++ {
 		var trxId bigint.Uint256
 		err = trxId.UnPack(bufReader)
 		if err != nil {
-			return map[bigint.Uint256]int{}, err
+			return map[string]int{}, err
 		}
 		// value is no use
-		trxIds[trxId] = 0
+		trxIds[trxId.GetHex()] = 0
 	}
 	return trxIds, nil
 }
 
-func (a AddressTrxDBMgr) DBPut(key string, value map[bigint.Uint256]int) error {
+func (a AddressTrxDBMgr) DBPut(key string, value map[string]int) error {
 	bytesValue, err := trxIdsToBytes(value)
 	if err != nil {
 		return err
@@ -163,10 +167,10 @@ func (a AddressTrxDBMgr) DBPut(key string, value map[bigint.Uint256]int) error {
 	return nil
 }
 
-func (a AddressTrxDBMgr) DBGet(key string) (map[bigint.Uint256]int, error) {
+func (a AddressTrxDBMgr) DBGet(key string) (map[string]int, error) {
 	bytesValue, err := a.db.Get([]byte(key), nil)
 	if err != nil {
-		return map[bigint.Uint256]int{}, err
+		return map[string]int{}, err
 	}
 	trxIds, err := trxIdsFromBytes(bytesValue)
 	return trxIds, nil

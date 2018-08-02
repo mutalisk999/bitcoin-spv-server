@@ -122,7 +122,7 @@ func getRawBlockType2(blockHash string) (string, error) {
 func getStartBlockHeight() (uint32, error) {
 	var startBlockHeight uint32
 	blockHeightStr, err := globalConfigDBMgr.DBGet("blockHeight")
-	if err != nil {
+	if err != nil && err.Error() == LevelDBNotFound {
 		startBlockHeight = 0
 	} else {
 		ui64, err := strconv.ParseUint(blockHeightStr, 10, 32)
@@ -132,6 +132,18 @@ func getStartBlockHeight() (uint32, error) {
 		startBlockHeight = uint32(ui64)
 	}
 	return startBlockHeight, nil
+}
+
+func storeBlockCache(blockCache *BlockCache) error {
+	err := addressTrxDBMgr.DBBatch(blockCache.AddressTrxs)
+	if err != nil {
+		return err
+	}
+	err = trxUtxoDBMgr.DBBatch(blockCache.TrxUtxos)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 func storeStartBlockHeight(blockHeight uint32) error {
@@ -149,7 +161,7 @@ func dealWithVinToCache(blockCache *BlockCache, vin transaction.TxIn, trxId bigi
 	for i := 0; i < len(blockCache.TrxUtxos); i++ {
 		if bigint.IsUint256Equal(&vin.PrevOut.Hash, &blockCache.TrxUtxos[i].TrxUtxoKey.TrxId) && vin.PrevOut.N == blockCache.TrxUtxos[i].TrxUtxoKey.Vout {
 			if blockCache.TrxUtxos[i].TrxUtxoValue.Status != 0 {
-				return errors.New("invalid utxo status, and utxo status must be unspent")
+				return errors.New("invalid utxo status, and utxo status in cache must be unspent")
 			}
 			blockCache.TrxUtxos[i].TrxUtxoValue.Status = 1
 			scriptPubKey = blockCache.TrxUtxos[i].TrxUtxoValue.ScriptPubKey
@@ -160,7 +172,7 @@ func dealWithVinToCache(blockCache *BlockCache, vin transaction.TxIn, trxId bigi
 	if !lastVoutInCache {
 		utxoSource := UtxoSource{vin.PrevOut.Hash, vin.PrevOut.N}
 		utxoDetail, err := trxUtxoDBMgr.DBGet(utxoSource)
-		if err != nil {
+		if err != nil && err.Error() == LevelDBNotFound {
 			return errors.New("can not find prevout trxid: " + vin.PrevOut.Hash.GetHex() + ", vout: " + strconv.Itoa(int(vin.PrevOut.N)))
 		}
 		scriptPubKey = utxoDetail.ScriptPubKey
@@ -184,7 +196,7 @@ func dealWithVinToCache(blockCache *BlockCache, vin transaction.TxIn, trxId bigi
 			addressInCache := false
 			for i := 0; i < len(blockCache.AddressTrxs); i++ {
 				if blockCache.AddressTrxs[i].AddressTrxKey == addrStr {
-					blockCache.AddressTrxs[i].AddressTrxValue[trxId] = 0
+					blockCache.AddressTrxs[i].AddressTrxValue[trxId.GetHex()] = 0
 					addressInCache = true
 					break
 				}
@@ -192,10 +204,11 @@ func dealWithVinToCache(blockCache *BlockCache, vin transaction.TxIn, trxId bigi
 			if !addressInCache {
 				addrTrxPair := AddressTrxPair{}
 				trxIds, err := addressTrxDBMgr.DBGet(addrStr)
-				if err != nil {
-					addrTrxPair = AddressTrxPair{addrStr, map[bigint.Uint256]int{trxId: 0}, 0}
+				if err != nil && err.Error() == LevelDBNotFound {
+					fmt.Println("err != nil:", err)
+					addrTrxPair = AddressTrxPair{addrStr, map[string]int{trxId.GetHex(): 0}, 0}
 				} else {
-					trxIds[trxId] = 0
+					trxIds[trxId.GetHex()] = 0
 					addrTrxPair = AddressTrxPair{addrStr, trxIds, 0}
 				}
 				blockCache.AddressTrxs = append(blockCache.AddressTrxs, addrTrxPair)
@@ -205,11 +218,59 @@ func dealWithVinToCache(blockCache *BlockCache, vin transaction.TxIn, trxId bigi
 	return nil
 }
 
-func dealWithVoutToCache(blockCache *BlockCache, vout transaction.TxOut, trxId bigint.Uint256, index uint32) error {
+func dealWithVoutToCache(blockHeight uint32, blockCache *BlockCache, vout transaction.TxOut, trxId bigint.Uint256, index uint32) error {
+	var scriptPubKey script.Script
+	var addrStr string
+
+	scriptPubKey = vout.ScriptPubKey
+	// deal address trx pair
+	isSucc, scriptType, addresses := script.ExtractDestination(scriptPubKey)
+	if isSucc {
+		if script.IsSingleAddress(scriptType) {
+			addrStr = addresses[0]
+		} else if script.IsMultiAddress(scriptType) {
+			addrStr = strings.Join(addresses, ",")
+		}
+		if addrStr != "" {
+			addressInCache := false
+			for i := 0; i < len(blockCache.AddressTrxs); i++ {
+				if blockCache.AddressTrxs[i].AddressTrxKey == addrStr {
+					blockCache.AddressTrxs[i].AddressTrxValue[trxId.GetHex()] = 0
+					addressInCache = true
+					break
+				}
+			}
+			if !addressInCache {
+				addrTrxPair := AddressTrxPair{}
+				trxIds, err := addressTrxDBMgr.DBGet(addrStr)
+				if err != nil && err.Error() == LevelDBNotFound {
+					addrTrxPair = AddressTrxPair{addrStr, map[string]int{trxId.GetHex(): 0}, 0}
+				} else {
+					trxIds[trxId.GetHex()] = 0
+					addrTrxPair = AddressTrxPair{addrStr, trxIds, 0}
+				}
+				blockCache.AddressTrxs = append(blockCache.AddressTrxs, addrTrxPair)
+			}
+		}
+	}
+	// deal trx utxo pair
+	for i := 0; i < len(blockCache.TrxUtxos); i++ {
+		if bigint.IsUint256Equal(&trxId, &blockCache.TrxUtxos[i].TrxUtxoKey.TrxId) && index == blockCache.TrxUtxos[i].TrxUtxoKey.Vout {
+			return errors.New("utxo should not be in cache")
+		}
+	}
+	utxoSource := UtxoSource{trxId, index}
+	utxoDetail := UtxoDetail{vout.Value, blockHeight, addrStr, scriptPubKey, 0}
+	trxUtxoPair := new(TrxUtxoPair)
+	trxUtxoPair.TrxUtxoKey = utxoSource
+	trxUtxoPair.TrxUtxoValue = utxoDetail
+	trxUtxoPair.TrxUtxoOp = 0
+	blockCache.AddTrxUtxoPair(*trxUtxoPair)
+
 	return nil
 }
 
-func dealWithTrxToCache(blockCache *BlockCache, trx *transaction.Transaction, isCoinBase bool) error {
+func dealWithTrxToCache(blockHeight uint32, blockCache *BlockCache, trx *transaction.Transaction, isCoinBase bool) error {
 	trxId, err := trx.CalcTrxId()
 	if err != nil {
 		return err
@@ -224,7 +285,7 @@ func dealWithTrxToCache(blockCache *BlockCache, trx *transaction.Transaction, is
 	}
 	for index, vout := range trx.Vout {
 		if vout.Value != 0 {
-			err := dealWithVoutToCache(blockCache, vout, trxId, uint32(index))
+			err := dealWithVoutToCache(blockHeight, blockCache, vout, trxId, uint32(index))
 			if err != nil {
 				return err
 			}
@@ -233,10 +294,10 @@ func dealWithTrxToCache(blockCache *BlockCache, trx *transaction.Transaction, is
 	return nil
 }
 
-func dealWithRawBlock(blockHeight uint32, rawBlockData *string) error {
+func dealWithRawBlock(blockHeight uint32, rawBlockData *string) (*BlockCache, error) {
 	blockBytes, err := hex.DecodeString(*rawBlockData)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	bytesBuf := bytes.NewBuffer(blockBytes)
 	bufReader := io.Reader(bytesBuf)
@@ -248,21 +309,22 @@ func dealWithRawBlock(blockHeight uint32, rawBlockData *string) error {
 		if i == 0 {
 			isCoinBase = true
 		}
-		err = dealWithTrxToCache(blockCache, &blockNew.Vtx[i], isCoinBase)
+		err = dealWithTrxToCache(blockHeight, blockCache, &blockNew.Vtx[i], isCoinBase)
 		if err != nil {
-			return err
+			return nil, err
 		}
 	}
-	return nil
+	return blockCache, nil
 }
 
 func doGatherUtxoType1(goroutine goroutine_mgr.Goroutine, args ...interface{}) {
 	defer goroutine.OnQuit()
+	var err error
 	for {
 		if quitFlag {
 			break
 		}
-		startBlockHeight, err := getStartBlockHeight()
+		startBlockHeight, err = getStartBlockHeight()
 		if err != nil {
 			break
 		}
@@ -295,7 +357,12 @@ func doGatherUtxoType1(goroutine goroutine_mgr.Goroutine, args ...interface{}) {
 					quitFlag = true
 					break
 				}
-				err = dealWithRawBlock(NewBlockHeight, &rawBlockData)
+				blockCache, err := dealWithRawBlock(NewBlockHeight, &rawBlockData)
+				if err != nil {
+					quitFlag = true
+					break
+				}
+				err = storeBlockCache(blockCache)
 				if err != nil {
 					quitFlag = true
 					break
@@ -318,11 +385,12 @@ func doGatherUtxoType1(goroutine goroutine_mgr.Goroutine, args ...interface{}) {
 
 func doGatherUtxoType2(goroutine goroutine_mgr.Goroutine, args ...interface{}) {
 	defer goroutine.OnQuit()
+	var err error
 	for {
 		if quitFlag {
 			break
 		}
-		startBlockHeight, err := getStartBlockHeight()
+		startBlockHeight, err = getStartBlockHeight()
 		if err != nil {
 			break
 		}
@@ -355,7 +423,17 @@ func doGatherUtxoType2(goroutine goroutine_mgr.Goroutine, args ...interface{}) {
 					quitFlag = true
 					break
 				}
-				err = dealWithRawBlock(NewBlockHeight, &rawBlockData)
+				blockCache, err := dealWithRawBlock(NewBlockHeight, &rawBlockData)
+				if err != nil {
+					quitFlag = true
+					break
+				}
+				err = storeBlockCache(blockCache)
+				if err != nil {
+					quitFlag = true
+					break
+				}
+				err = storeStartBlockHeight(NewBlockHeight)
 				if err != nil {
 					quitFlag = true
 					break
