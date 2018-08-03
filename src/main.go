@@ -13,11 +13,11 @@ var goroutineMgr *goroutine_mgr.GoroutineManager
 var globalConfigDBMgr *GlobalConfigDBMgr
 var addressTrxDBMgr *AddressTrxDBMgr
 var trxUtxoDBMgr *TrxUtxoDBMgr
+var rawTrxDBMgr *RawTrxDBMgr
 
-var dbPath string = "F:/btc_spv_data/db"
 var quitFlag = false
 var quitChan chan byte
-var gatherType = 2
+var config Config
 
 var startBlockHeight uint32
 
@@ -35,21 +35,28 @@ func appInit() error {
 
 	// init global config db manager
 	globalConfigDBMgr = new(GlobalConfigDBMgr)
-	err = globalConfigDBMgr.DBOpen(dbPath + "/" + "global_config_db")
+	err = globalConfigDBMgr.DBOpen(config.DBConfig.DBDir + "/" + "global_config_db")
 	if err != nil {
 		return err
 	}
 
 	// init address trx db manager
 	addressTrxDBMgr = new(AddressTrxDBMgr)
-	err = addressTrxDBMgr.DBOpen(dbPath + "/" + "address_trx_db")
+	err = addressTrxDBMgr.DBOpen(config.DBConfig.DBDir + "/" + "address_trx_db")
 	if err != nil {
 		return err
 	}
 
 	// init trx utxo db manager
 	trxUtxoDBMgr = new(TrxUtxoDBMgr)
-	err = trxUtxoDBMgr.DBOpen(dbPath + "/" + "trx_utxo_db")
+	err = trxUtxoDBMgr.DBOpen(config.DBConfig.DBDir + "/" + "trx_utxo_db")
+	if err != nil {
+		return err
+	}
+
+	// init raw trx db manager
+	rawTrxDBMgr = new(RawTrxDBMgr)
+	err = rawTrxDBMgr.DBOpen(config.DBConfig.DBDir + "/" + "raw_trx_db")
 	if err != nil {
 		return err
 	}
@@ -59,12 +66,12 @@ func appInit() error {
 
 func appRun() error {
 	startSignalHandler()
-	//startRpcServer()
+	startRpcServer()
 
-	if gatherType == 1 {
+	if config.RpcClientConfig.DataSource == "btcWallet" {
 		// collect from the wallet node
 		startGatherUtxoType1()
-	} else if gatherType == 2 {
+	} else if config.RpcClientConfig.DataSource == "rawBlock" {
 		// collect from the raw block collector
 		startGatherUtxoType2()
 	} else {
@@ -113,12 +120,21 @@ func appCmd() error {
 	globalConfigDBMgr.DBClose()
 	addressTrxDBMgr.DBClose()
 	trxUtxoDBMgr.DBClose()
+	rawTrxDBMgr.DBClose()
 
 	return nil
 }
 
 func main() {
 	var err error
+
+	// init config
+	jsonParser := new(JsonStruct)
+	err = jsonParser.Load("config.json", &config)
+	if err != nil {
+		fmt.Println("Load config.json", err)
+		return
+	}
 
 	err = appInit()
 	if err != nil {

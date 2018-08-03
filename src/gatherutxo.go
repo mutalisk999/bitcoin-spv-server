@@ -18,7 +18,7 @@ import (
 )
 
 func doHttpJsonRpcCallType1(method string, args ...interface{}) (*jsonrpc.RPCResponse, error) {
-	rpcClient := jsonrpc.NewClient("http://test:test@192.168.1.107:30011")
+	rpcClient := jsonrpc.NewClient(config.RpcClientConfig.BtcWallet.RpcReqUrl)
 	rpcResponse, err := rpcClient.Call(method, args)
 	if err != nil {
 		return nil, err
@@ -69,7 +69,7 @@ func getRawBlockType1(blockHash string) (string, error) {
 }
 
 func doHttpJsonRpcCallType2(method string, args ...interface{}) (*jsonrpc.RPCResponse, error) {
-	rpcClient := jsonrpc.NewClient("http://192.168.1.107:38080")
+	rpcClient := jsonrpc.NewClient(config.RpcClientConfig.RawBlock.RpcReqUrl)
 	rpcResponse, err := rpcClient.Call(method, args)
 	if err != nil {
 		return nil, err
@@ -140,6 +140,10 @@ func storeBlockCache(blockCache *BlockCache) error {
 		return err
 	}
 	err = trxUtxoDBMgr.DBBatch(blockCache.TrxUtxos)
+	if err != nil {
+		return err
+	}
+	err = rawTrxDBMgr.DBBatch(blockCache.RawTrxs)
 	if err != nil {
 		return err
 	}
@@ -270,6 +274,18 @@ func dealWithVoutToCache(blockHeight uint32, vout transaction.TxOut, trxId bigin
 	return nil
 }
 
+func dealWithRawTrxToCache(trxId bigint.Uint256, trx *transaction.Transaction) error {
+	bytesBuf := bytes.NewBuffer([]byte{})
+	bufWriter := io.Writer(bytesBuf)
+	err := trx.Pack(bufWriter)
+	if err != nil {
+		return err
+	}
+	rawTrxPair := RawTrxPair{trxId.GetHex(), bytesBuf.Bytes(), 0}
+	blockCache.AddRawTrxPair(rawTrxPair)
+	return nil
+}
+
 func dealWithTrxToCache(blockHeight uint32, trx *transaction.Transaction, isCoinBase bool) error {
 	trxId, err := trx.CalcTrxId()
 	if err != nil {
@@ -289,6 +305,11 @@ func dealWithTrxToCache(blockHeight uint32, trx *transaction.Transaction, isCoin
 			return err
 		}
 	}
+	err = dealWithRawTrxToCache(trxId, trx)
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -361,7 +382,7 @@ func doGatherUtxoType1(goroutine goroutine_mgr.Goroutine, args ...interface{}) {
 					quitFlag = true
 					break
 				}
-				if NewBlockHeight % 200 == 0 {
+				if NewBlockHeight%config.CacheConfig.BlockCacheCount == 0 {
 					err = storeBlockCache(blockCache)
 					if err != nil {
 						quitFlag = true
@@ -445,7 +466,7 @@ func doGatherUtxoType2(goroutine goroutine_mgr.Goroutine, args ...interface{}) {
 					quitFlag = true
 					break
 				}
-				if NewBlockHeight % 200 == 0 {
+				if NewBlockHeight%config.CacheConfig.BlockCacheCount == 0 {
 					err = storeBlockCache(blockCache)
 					if err != nil {
 						quitFlag = true

@@ -41,6 +41,16 @@ type TrxUtxoPair struct {
 	TrxUtxoOp    byte // 0 put, 1 delete
 }
 
+type RawTrxDBMgr struct {
+	db *leveldb.DB
+}
+
+type RawTrxPair struct {
+	TrxIdKey        string
+	RawTrxDataValue []byte
+	RawTrxOp        byte // 0 put, 1 delete
+}
+
 func (g *GlobalConfigDBMgr) DBOpen(dbFile string) error {
 	var err error
 	g.db, err = leveldb.OpenFile(dbFile, nil)
@@ -328,6 +338,57 @@ func (t TrxUtxoDBMgr) DBBatch(trxUtxos []TrxUtxoPair) error {
 		}
 	}
 	err := t.db.Write(batch, nil)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (r *RawTrxDBMgr) DBOpen(dbFile string) error {
+	var err error
+	r.db, err = leveldb.OpenFile(dbFile, nil)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (r *RawTrxDBMgr) DBClose() error {
+	err := r.db.Close()
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (r RawTrxDBMgr) DBPut(key string, value []byte) error {
+	err := r.db.Put([]byte(key), value, nil)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (r RawTrxDBMgr) DBGet(key string) ([]byte, error) {
+	bytesValue, err := r.db.Get([]byte(key), nil)
+	if err != nil {
+		return []byte{}, err
+	}
+	return bytesValue, nil
+}
+
+func (r RawTrxDBMgr) DBBatch(rawTrxs []RawTrxPair) error {
+	batch := new(leveldb.Batch)
+	for _, rawTrx := range rawTrxs {
+		if rawTrx.RawTrxOp == 0 {
+			batch.Put([]byte(rawTrx.TrxIdKey), rawTrx.RawTrxDataValue)
+		} else if rawTrx.RawTrxOp == 1 {
+			batch.Delete([]byte(rawTrx.TrxIdKey))
+		} else {
+			return errors.New("RawTrxOp type not support")
+		}
+	}
+	err := r.db.Write(batch, nil)
 	if err != nil {
 		return err
 	}
