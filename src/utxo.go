@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/hex"
 	"github.com/mutalisk999/bitcoin-lib/src/bigint"
 	"github.com/mutalisk999/bitcoin-lib/src/blob"
 	"github.com/mutalisk999/bitcoin-lib/src/script"
@@ -37,9 +38,28 @@ func (u *UtxoSource) UnPack(reader io.Reader) error {
 	return nil
 }
 
+type UtxoSourcePrintAble struct {
+	TrxId string
+	Vout  uint32
+}
+
+func (u *UtxoSource) GetUtxoSourcePrintAble() UtxoSourcePrintAble {
+	utxoSourcePrintAble := new(UtxoSourcePrintAble)
+	utxoSourcePrintAble.TrxId = u.TrxId.GetHex()
+	utxoSourcePrintAble.Vout = u.Vout
+	return *utxoSourcePrintAble
+}
+
+func (u *UtxoSourcePrintAble) GetUtxoSource() UtxoSource {
+	utxoSource := new(UtxoSource)
+	utxoSource.TrxId.SetHex(u.TrxId)
+	utxoSource.Vout = u.Vout
+	return *utxoSource
+}
+
 type UtxoDetail struct {
 	Amount       int64
-	Height       uint32
+	BlockHeight  uint32
 	Address      string
 	ScriptPubKey script.Script
 	Status       byte // 0 valid     1 has spent
@@ -50,7 +70,7 @@ func (u UtxoDetail) Pack(writer io.Writer) error {
 	if err != nil {
 		return err
 	}
-	err = serialize.PackUint32(writer, u.Height)
+	err = serialize.PackUint32(writer, u.BlockHeight)
 	if err != nil {
 		return err
 	}
@@ -77,7 +97,7 @@ func (u *UtxoDetail) UnPack(reader io.Reader) error {
 	if err != nil {
 		return err
 	}
-	u.Height, err = serialize.UnPackUint32(reader)
+	u.BlockHeight, err = serialize.UnPackUint32(reader)
 	if err != nil {
 		return err
 	}
@@ -96,4 +116,36 @@ func (u *UtxoDetail) UnPack(reader io.Reader) error {
 		return err
 	}
 	return nil
+}
+
+type UtxoDetailPrintAble struct {
+	Amount       int64
+	BlockHeight  uint32
+	Address      string
+	ScriptPubKey string
+	Status       byte
+}
+
+func (u *UtxoDetail) GetUtxoDetailPrintAble() UtxoDetailPrintAble {
+	utxoDetailPrintAble := new(UtxoDetailPrintAble)
+	utxoDetailPrintAble.Amount = u.Amount
+	utxoDetailPrintAble.BlockHeight = u.BlockHeight
+	utxoDetailPrintAble.Address = u.Address
+	utxoDetailPrintAble.ScriptPubKey = hex.EncodeToString(u.ScriptPubKey.GetScriptBytes())
+	utxoDetailPrintAble.Status = u.Status
+	return *utxoDetailPrintAble
+}
+
+func (u *UtxoDetailPrintAble) GetUtxoDetail() (UtxoDetail, error) {
+	utxoDetail := new(UtxoDetail)
+	utxoDetail.Amount = u.Amount
+	utxoDetail.BlockHeight = u.BlockHeight
+	utxoDetail.Address = u.Address
+	bytesScript, err := hex.DecodeString(u.ScriptPubKey)
+	if err != nil {
+		return UtxoDetail{}, err
+	}
+	utxoDetail.ScriptPubKey.SetScriptBytes(bytesScript)
+	utxoDetail.Status = u.Status
+	return *utxoDetail, nil
 }
