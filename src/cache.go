@@ -1,5 +1,7 @@
 package main
 
+import "strconv"
+
 type BlockCache struct {
 	AddressTrxs []AddressTrxPair
 	TrxUtxos    []TrxUtxoPair
@@ -19,3 +21,25 @@ func (b *BlockCache) AddRawTrxPair(rawTrxPair RawTrxPair) {
 }
 
 var blockCache *BlockCache
+
+type UtxoMemCache struct {
+	UtxoDetailMemMap map[string]UtxoDetail
+}
+
+func (u UtxoMemCache) Get(utxoSrc UtxoSource) (UtxoDetail, bool) {
+	memCacheKey := utxoSrc.TrxId.GetHex() + "," + strconv.Itoa(int(utxoSrc.Vout))
+	utxoDetail, ok := u.UtxoDetailMemMap[memCacheKey]
+	return utxoDetail, ok
+}
+
+func (u *UtxoMemCache) Add(utxoSrc UtxoSource, utxoDetail UtxoDetail) {
+	memCacheKey := utxoSrc.TrxId.GetHex() + "," + strconv.Itoa(int(utxoSrc.Vout))
+	u.UtxoDetailMemMap[memCacheKey] = utxoDetail
+}
+
+func (u *UtxoMemCache) Remove(utxoSrc UtxoSource) {
+	memCacheKey := utxoSrc.TrxId.GetHex() + "," + strconv.Itoa(int(utxoSrc.Vout))
+	delete(u.UtxoDetailMemMap, memCacheKey)
+}
+
+var utxoMemCache *UtxoMemCache

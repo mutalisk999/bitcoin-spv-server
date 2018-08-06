@@ -344,6 +344,30 @@ func (t TrxUtxoDBMgr) DBBatch(trxUtxos []TrxUtxoPair) error {
 	return nil
 }
 
+func (t TrxUtxoDBMgr) InitUtxoMemCache() error {
+	var err error
+	iter := t.db.NewIterator(nil, nil)
+	for iter.Next() {
+		bytesKey := iter.Key()
+		bytesValue := iter.Value()
+		utxoSrc, err := utxoSrcFromBytes(bytesKey)
+		if err != nil {
+			return err
+		}
+		utxoDetail, err := utxoDetailFromBytes(bytesValue)
+		if err != nil {
+			return err
+		}
+		utxoMemCache.Add(utxoSrc, utxoDetail)
+	}
+	iter.Release()
+	err = iter.Error()
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 func (r *RawTrxDBMgr) DBOpen(dbFile string) error {
 	var err error
 	r.db, err = leveldb.OpenFile(dbFile, nil)

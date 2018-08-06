@@ -22,6 +22,11 @@ func (s *Service) GetBlockCount(r *http.Request, args *interface{}, reply *uint3
 	return nil
 }
 
+func (s *Service) GetUtxoCount(r *http.Request, args *interface{}, reply *uint32) error {
+	*reply = uint32(len(utxoMemCache.UtxoDetailMemMap))
+	return nil
+}
+
 func (s *Service) GetAddressTrxs(r *http.Request, args *string, reply *[]string) error {
 	trxIds, err := addressTrxDBMgr.DBGet(*args)
 	if err != nil {
@@ -97,10 +102,8 @@ func (s *Service) ListUnSpent(r *http.Request, args *string, reply *[]UtxoDetail
 			if err != nil {
 				return errors.New("utxo source not found")
 			}
-			if utxoDetail.Status == 0 {
-				utxoDetailPrintAble := utxoDetail.GetUtxoDetailPrintAble()
-				*reply = append(*reply, utxoDetailPrintAble)
-			}
+			utxoDetailPrintAble := utxoDetail.GetUtxoDetailPrintAble()
+			*reply = append(*reply, utxoDetailPrintAble)
 		}
 	}
 	return nil

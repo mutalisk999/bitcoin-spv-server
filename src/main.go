@@ -29,6 +29,10 @@ func appInit() error {
 	// init block cache
 	blockCache = new(BlockCache)
 
+	// init utxo memory cache
+	utxoMemCache = new(UtxoMemCache)
+	utxoMemCache.UtxoDetailMemMap = make(map[string]UtxoDetail)
+
 	// init goroutine manager
 	goroutineMgr = new(goroutine_mgr.GoroutineManager)
 	goroutineMgr.Initialise("MainGoroutineManager")
@@ -57,6 +61,12 @@ func appInit() error {
 	// init raw trx db manager
 	rawTrxDBMgr = new(RawTrxDBMgr)
 	err = rawTrxDBMgr.DBOpen(config.DBConfig.DBDir + "/" + "raw_trx_db")
+	if err != nil {
+		return err
+	}
+
+	// init utxo memory cache
+	err = trxUtxoDBMgr.InitUtxoMemCache()
 	if err != nil {
 		return err
 	}
@@ -108,6 +118,8 @@ func appCmd() error {
 			break
 		} else if strLine == "getblockcount" {
 			fmt.Println(startBlockHeight)
+		} else if strLine == "getutxocount" {
+			fmt.Println(len(utxoMemCache.UtxoDetailMemMap))
 		} else if strLine == "goroutinestatus" {
 			goroutineMgr.GoroutineDump()
 		} else {

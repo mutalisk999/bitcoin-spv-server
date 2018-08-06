@@ -3,7 +3,7 @@
     "dbDir":"db"
   },
   "cacheConfig":{
-    "blockCacheCount":200
+    "blockCacheCount":10
   },
   "rpcClientConfig":{
     "dataSource":"rawBlock",

@@ -62,7 +62,6 @@ type UtxoDetail struct {
 	BlockHeight  uint32
 	Address      string
 	ScriptPubKey script.Script
-	Status       byte // 0 valid     1 has spent
 }
 
 func (u UtxoDetail) Pack(writer io.Writer) error {
@@ -81,10 +80,6 @@ func (u UtxoDetail) Pack(writer io.Writer) error {
 		return err
 	}
 	err = u.ScriptPubKey.Pack(writer)
-	if err != nil {
-		return err
-	}
-	err = serialize.PackByte(writer, u.Status)
 	if err != nil {
 		return err
 	}
@@ -111,10 +106,6 @@ func (u *UtxoDetail) UnPack(reader io.Reader) error {
 	if err != nil {
 		return err
 	}
-	u.Status, err = serialize.UnPackByte(reader)
-	if err != nil {
-		return err
-	}
 	return nil
 }
 
@@ -123,7 +114,6 @@ type UtxoDetailPrintAble struct {
 	BlockHeight  uint32
 	Address      string
 	ScriptPubKey string
-	Status       byte
 }
 
 func (u *UtxoDetail) GetUtxoDetailPrintAble() UtxoDetailPrintAble {
@@ -132,7 +122,6 @@ func (u *UtxoDetail) GetUtxoDetailPrintAble() UtxoDetailPrintAble {
 	utxoDetailPrintAble.BlockHeight = u.BlockHeight
 	utxoDetailPrintAble.Address = u.Address
 	utxoDetailPrintAble.ScriptPubKey = hex.EncodeToString(u.ScriptPubKey.GetScriptBytes())
-	utxoDetailPrintAble.Status = u.Status
 	return *utxoDetailPrintAble
 }
 
@@ -146,6 +135,5 @@ func (u *UtxoDetailPrintAble) GetUtxoDetail() (UtxoDetail, error) {
 		return UtxoDetail{}, err
 	}
 	utxoDetail.ScriptPubKey.SetScriptBytes(bytesScript)
-	utxoDetail.Status = u.Status
 	return *utxoDetail, nil
 }

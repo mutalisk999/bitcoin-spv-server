@@ -159,34 +159,21 @@ func storeStartBlockHeight(blockHeight uint32) error {
 }
 
 func dealWithVinToCache(vin transaction.TxIn, trxId bigint.Uint256) error {
-	lastVoutInCache := false
-	var scriptPubKey script.Script
 	// deal trx utxo pair
-	for i := 0; i < len(blockCache.TrxUtxos); i++ {
-		if bigint.IsUint256Equal(&vin.PrevOut.Hash, &blockCache.TrxUtxos[i].TrxUtxoKey.TrxId) && vin.PrevOut.N == blockCache.TrxUtxos[i].TrxUtxoKey.Vout {
-			if blockCache.TrxUtxos[i].TrxUtxoValue.Status != 0 {
-				return errors.New("invalid utxo status, and utxo status in cache must be unspent")
-			}
-			blockCache.TrxUtxos[i].TrxUtxoValue.Status = 1
-			scriptPubKey = blockCache.TrxUtxos[i].TrxUtxoValue.ScriptPubKey
-			lastVoutInCache = true
-			break
-		}
+	// query from memory cache
+	utxoSource := UtxoSource{vin.PrevOut.Hash, vin.PrevOut.N}
+	utxoDetail, ok := utxoMemCache.Get(utxoSource)
+	if !ok {
+		return errors.New("can not find prevout trxid: " + vin.PrevOut.Hash.GetHex() + ", vout: " + strconv.Itoa(int(vin.PrevOut.N)))
 	}
-	if !lastVoutInCache {
-		utxoSource := UtxoSource{vin.PrevOut.Hash, vin.PrevOut.N}
-		utxoDetail, err := trxUtxoDBMgr.DBGet(utxoSource)
-		if err != nil && err.Error() == LevelDBNotFound {
-			return errors.New("can not find prevout trxid: " + vin.PrevOut.Hash.GetHex() + ", vout: " + strconv.Itoa(int(vin.PrevOut.N)))
-		}
-		scriptPubKey = utxoDetail.ScriptPubKey
-		trxUtxoPair := new(TrxUtxoPair)
-		trxUtxoPair.TrxUtxoKey = utxoSource
-		utxoDetail.Status = 1
-		trxUtxoPair.TrxUtxoValue = utxoDetail
-		trxUtxoPair.TrxUtxoOp = 0
-		blockCache.AddTrxUtxoPair(*trxUtxoPair)
-	}
+	utxoMemCache.Remove(utxoSource)
+
+	scriptPubKey := utxoDetail.ScriptPubKey
+	trxUtxoPair := new(TrxUtxoPair)
+	trxUtxoPair.TrxUtxoKey = utxoSource
+	trxUtxoPair.TrxUtxoOp = 1
+	blockCache.AddTrxUtxoPair(*trxUtxoPair)
+
 	// deal address trx pair
 	isSucc, scriptType, addresses := script.ExtractDestination(scriptPubKey)
 	if isSucc {
@@ -258,18 +245,16 @@ func dealWithVoutToCache(blockHeight uint32, vout transaction.TxOut, trxId bigin
 		}
 	}
 	// deal trx utxo pair
-	for i := 0; i < len(blockCache.TrxUtxos); i++ {
-		if bigint.IsUint256Equal(&trxId, &blockCache.TrxUtxos[i].TrxUtxoKey.TrxId) && index == blockCache.TrxUtxos[i].TrxUtxoKey.Vout {
-			return errors.New("utxo should not be in cache")
-		}
-	}
 	utxoSource := UtxoSource{trxId, index}
-	utxoDetail := UtxoDetail{vout.Value, blockHeight, addrStr, scriptPubKey, 0}
+	utxoDetail := UtxoDetail{vout.Value, blockHeight, addrStr, scriptPubKey}
 	trxUtxoPair := new(TrxUtxoPair)
 	trxUtxoPair.TrxUtxoKey = utxoSource
 	trxUtxoPair.TrxUtxoValue = utxoDetail
 	trxUtxoPair.TrxUtxoOp = 0
 	blockCache.AddTrxUtxoPair(*trxUtxoPair)
+
+	// add to memory cache
+	utxoMemCache.Add(utxoSource, utxoDetail)
 
 	return nil
 }
