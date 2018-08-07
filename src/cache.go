@@ -1,11 +1,15 @@
 package main
 
-import "strconv"
+import (
+	"github.com/mutalisk999/bitcoin-lib/src/bigint"
+	"strconv"
+)
 
 type BlockCache struct {
 	AddressTrxs []AddressTrxPair
 	TrxUtxos    []TrxUtxoPair
 	RawTrxs     []RawTrxPair
+	AddrChanged []string
 }
 
 func (b *BlockCache) AddAddressTrxPair(addressTrxPair AddressTrxPair) {
@@ -18,6 +22,19 @@ func (b *BlockCache) AddTrxUtxoPair(trxUtxoPair TrxUtxoPair) {
 
 func (b *BlockCache) AddRawTrxPair(rawTrxPair RawTrxPair) {
 	b.RawTrxs = append(b.RawTrxs, rawTrxPair)
+}
+
+func (b *BlockCache) AddAddrChanged(addrStr string) {
+	isInAddressCache := false
+	for _, addr := range b.AddrChanged {
+		if addrStr == addr {
+			isInAddressCache = true
+			break
+		}
+	}
+	if !isInAddressCache {
+		b.AddrChanged = append(b.AddrChanged, addrStr)
+	}
 }
 
 var blockCache *BlockCache
@@ -43,3 +60,37 @@ func (u *UtxoMemCache) Remove(utxoSrc UtxoSource) {
 }
 
 var utxoMemCache *UtxoMemCache
+
+type AddressTrxsMemCache struct {
+	AddressTrxsMap map[string][]bigint.Uint256
+}
+
+func (a *AddressTrxsMemCache) Set(addrStr string, trxIds []bigint.Uint256) {
+	a.AddressTrxsMap[addrStr] = trxIds
+}
+
+func (a *AddressTrxsMemCache) Get(addrStr string) ([]bigint.Uint256, bool) {
+	trxIds, ok := a.AddressTrxsMap[addrStr]
+	return trxIds, ok
+}
+
+func (a *AddressTrxsMemCache) Add(addrStr string, trxId bigint.Uint256) {
+	trxIdsByAddr, ok := a.AddressTrxsMap[addrStr]
+	if !ok {
+		a.AddressTrxsMap[addrStr] = []bigint.Uint256{trxId}
+	} else {
+		isInTrxIds := false
+		for _, trxIdAddr := range trxIdsByAddr {
+			if bigint.IsUint256Equal(&trxIdAddr, &trxId) {
+				isInTrxIds = true
+				break
+			}
+		}
+		if !isInTrxIds {
+			trxIdsByAddr = append(trxIdsByAddr, trxId)
+			a.AddressTrxsMap[addrStr] = trxIdsByAddr
+		}
+	}
+}
+
+var addressTrxsMemCache *AddressTrxsMemCache

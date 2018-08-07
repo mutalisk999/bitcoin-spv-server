@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"errors"
 	"fmt"
+	"github.com/mutalisk999/bitcoin-lib/src/bigint"
 	"github.com/mutalisk999/go-lib/src/sched/goroutine_mgr"
 	"os"
 	"strings"
@@ -23,6 +24,7 @@ var startBlockHeight uint32
 
 func appInit() error {
 	var err error
+
 	// init quit channel
 	quitChan = make(chan byte)
 
@@ -32,6 +34,10 @@ func appInit() error {
 	// init utxo memory cache
 	utxoMemCache = new(UtxoMemCache)
 	utxoMemCache.UtxoDetailMemMap = make(map[string]UtxoDetail)
+
+	// init address trxs memory cache
+	addressTrxsMemCache = new(AddressTrxsMemCache)
+	addressTrxsMemCache.AddressTrxsMap = make(map[string][]bigint.Uint256)
 
 	// init goroutine manager
 	goroutineMgr = new(goroutine_mgr.GoroutineManager)
@@ -65,8 +71,26 @@ func appInit() error {
 		return err
 	}
 
+	// get chain index state
+	ok, err := getChainIndexState()
+	if err != nil {
+		if err.Error() != LevelDBNotFound {
+			return err
+		}
+	} else {
+		if !ok {
+			return err
+		}
+	}
+
 	// init utxo memory cache
 	err = trxUtxoDBMgr.InitUtxoMemCache()
+	if err != nil {
+		return err
+	}
+
+	// init address trxs memory cache
+	err = addressTrxDBMgr.InitAddressTrxsMemCache()
 	if err != nil {
 		return err
 	}

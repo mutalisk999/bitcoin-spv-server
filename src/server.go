@@ -7,7 +7,6 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/gorilla/rpc"
 	"github.com/gorilla/rpc/json"
-	"github.com/mutalisk999/bitcoin-lib/src/bigint"
 	"github.com/mutalisk999/bitcoin-lib/src/transaction"
 	"github.com/mutalisk999/go-lib/src/sched/goroutine_mgr"
 	"io"
@@ -32,8 +31,8 @@ func (s *Service) GetAddressTrxs(r *http.Request, args *string, reply *[]string)
 	if err != nil {
 		return errors.New("address not found")
 	}
-	for trxId, _ := range trxIds {
-		*reply = append(*reply, trxId)
+	for _, trxId := range trxIds {
+		*reply = append(*reply, trxId.GetHex())
 	}
 	return nil
 }
@@ -80,8 +79,8 @@ func (s *Service) ListUnSpent(r *http.Request, args *string, reply *[]UtxoDetail
 	if err != nil {
 		return errors.New("address not found")
 	}
-	for trxId, _ := range trxIds {
-		bytesRawTrx, err := rawTrxDBMgr.DBGet(trxId)
+	for _, trxId := range trxIds {
+		bytesRawTrx, err := rawTrxDBMgr.DBGet(trxId.GetHex())
 		if err != nil {
 			return errors.New("transaction id not found")
 		}
@@ -93,10 +92,8 @@ func (s *Service) ListUnSpent(r *http.Request, args *string, reply *[]UtxoDetail
 			return errors.New("unpack raw transaction fail")
 		}
 		for i, _ := range trx.Vout {
-			ui256 := new(bigint.Uint256)
-			ui256.SetHex(trxId)
 			utxoSource := new(UtxoSource)
-			utxoSource.TrxId = *ui256
+			utxoSource.TrxId = trxId
 			utxoSource.Vout = uint32(i)
 			utxoDetail, err := trxUtxoDBMgr.DBGet(*utxoSource)
 			if err != nil {

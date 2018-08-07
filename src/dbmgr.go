@@ -27,8 +27,8 @@ type AddressTrxDBMgr struct {
 
 type AddressTrxPair struct {
 	AddressTrxKey   string
-	AddressTrxValue map[string]int // only use key
-	AddressTrxOp    byte           // 0 put, 1 delete
+	AddressTrxValue []bigint.Uint256
+	AddressTrxOp    byte // 0 put, 1 delete
 }
 
 type TrxUtxoDBMgr struct {
@@ -127,17 +127,14 @@ func (a *AddressTrxDBMgr) DBClose() error {
 	return nil
 }
 
-func trxIdsToBytes(trxIds map[string]int) ([]byte, error) {
+func trxIdsToBytes(trxIds []bigint.Uint256) ([]byte, error) {
 	bytesBuf := bytes.NewBuffer([]byte{})
 	bufWriter := io.Writer(bytesBuf)
 	err := serialize.PackCompactSize(bufWriter, uint64(len(trxIds)))
 	if err != nil {
 		return []byte{}, err
 	}
-	// just pack key only
-	for hexStr, _ := range trxIds {
-		trxId := new(bigint.Uint256)
-		trxId.SetHex(hexStr)
+	for _, trxId := range trxIds {
 		err = trxId.Pack(bufWriter)
 		if err != nil {
 			return []byte{}, err
@@ -146,26 +143,25 @@ func trxIdsToBytes(trxIds map[string]int) ([]byte, error) {
 	return bytesBuf.Bytes(), nil
 }
 
-func trxIdsFromBytes(bytesTrxIds []byte) (map[string]int, error) {
-	trxIds := make(map[string]int)
+func trxIdsFromBytes(bytesTrxIds []byte) ([]bigint.Uint256, error) {
+	var trxIds []bigint.Uint256
 	bufReader := io.Reader(bytes.NewBuffer(bytesTrxIds))
 	ui64, err := serialize.UnPackCompactSize(bufReader)
 	if err != nil {
-		return map[string]int{}, err
+		return []bigint.Uint256{}, err
 	}
 	for i := 0; i < int(ui64); i++ {
 		var trxId bigint.Uint256
 		err = trxId.UnPack(bufReader)
 		if err != nil {
-			return map[string]int{}, err
+			return []bigint.Uint256{}, err
 		}
-		// value is no use
-		trxIds[trxId.GetHex()] = 0
+		trxIds = append(trxIds, trxId)
 	}
 	return trxIds, nil
 }
 
-func (a AddressTrxDBMgr) DBPut(key string, value map[string]int) error {
+func (a AddressTrxDBMgr) DBPut(key string, value []bigint.Uint256) error {
 	bytesValue, err := trxIdsToBytes(value)
 	if err != nil {
 		return err
@@ -177,10 +173,10 @@ func (a AddressTrxDBMgr) DBPut(key string, value map[string]int) error {
 	return nil
 }
 
-func (a AddressTrxDBMgr) DBGet(key string) (map[string]int, error) {
+func (a AddressTrxDBMgr) DBGet(key string) ([]bigint.Uint256, error) {
 	bytesValue, err := a.db.Get([]byte(key), nil)
 	if err != nil {
-		return map[string]int{}, err
+		return []bigint.Uint256{}, err
 	}
 	trxIds, err := trxIdsFromBytes(bytesValue)
 	return trxIds, nil
@@ -359,6 +355,26 @@ func (t TrxUtxoDBMgr) InitUtxoMemCache() error {
 			return err
 		}
 		utxoMemCache.Add(utxoSrc, utxoDetail)
+	}
+	iter.Release()
+	err = iter.Error()
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (a AddressTrxDBMgr) InitAddressTrxsMemCache() error {
+	var err error
+	iter := a.db.NewIterator(nil, nil)
+	for iter.Next() {
+		bytesKey := iter.Key()
+		bytesValue := iter.Value()
+		trxIds, err := trxIdsFromBytes(bytesValue)
+		if err != nil {
+			return err
+		}
+		addressTrxsMemCache.Set(string(bytesKey), trxIds)
 	}
 	iter.Release()
 	err = iter.Error()

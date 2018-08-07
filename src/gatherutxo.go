@@ -134,6 +134,42 @@ func getStartBlockHeight() (uint32, error) {
 	return startBlockHeight, nil
 }
 
+func getChainIndexState() (bool, error) {
+	state, err := globalConfigDBMgr.DBGet("chainIndexState")
+	if err != nil {
+		return false, err
+	}
+	if state == "0" {
+		return false, errors.New("chain index state is cached")
+	} else if state == "1" {
+		return true, nil
+	}
+	return false, errors.New("chain index state is cached")
+}
+
+func storeChainIndexState(state string) error {
+	err := globalConfigDBMgr.DBPut("chainIndexState", state)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func applyTrxsToBlockCache(blockCache *BlockCache) error {
+	for _, addrStr := range blockCache.AddrChanged {
+		trxIds, ok := addressTrxsMemCache.Get(addrStr)
+		if !ok {
+			return errors.New("can not find trxs by addrStr in AddrChanged")
+		}
+		addressTrxPair := new(AddressTrxPair)
+		addressTrxPair.AddressTrxKey = addrStr
+		addressTrxPair.AddressTrxValue = trxIds
+		addressTrxPair.AddressTrxOp = 0
+		blockCache.AddAddressTrxPair(*addressTrxPair)
+	}
+	return nil
+}
+
 func storeBlockCache(blockCache *BlockCache) error {
 	err := addressTrxDBMgr.DBBatch(blockCache.AddressTrxs)
 	if err != nil {
@@ -184,26 +220,9 @@ func dealWithVinToCache(vin transaction.TxIn, trxId bigint.Uint256) error {
 			addrStr = strings.Join(addresses, ",")
 		}
 		if addrStr != "" {
-			addressInCache := false
-			for i := 0; i < len(blockCache.AddressTrxs); i++ {
-				if blockCache.AddressTrxs[i].AddressTrxKey == addrStr {
-					blockCache.AddressTrxs[i].AddressTrxValue[trxId.GetHex()] = 0
-					addressInCache = true
-					break
-				}
-			}
-			if !addressInCache {
-				addrTrxPair := AddressTrxPair{}
-				trxIds, err := addressTrxDBMgr.DBGet(addrStr)
-				if err != nil && err.Error() == LevelDBNotFound {
-					fmt.Println("err != nil:", err)
-					addrTrxPair = AddressTrxPair{addrStr, map[string]int{trxId.GetHex(): 0}, 0}
-				} else {
-					trxIds[trxId.GetHex()] = 0
-					addrTrxPair = AddressTrxPair{addrStr, trxIds, 0}
-				}
-				blockCache.AddAddressTrxPair(addrTrxPair)
-			}
+			// add to address trxs memory cache
+			addressTrxsMemCache.Add(addrStr, trxId)
+			blockCache.AddAddrChanged(addrStr)
 		}
 	}
 	return nil
@@ -223,25 +242,9 @@ func dealWithVoutToCache(blockHeight uint32, vout transaction.TxOut, trxId bigin
 			addrStr = strings.Join(addresses, ",")
 		}
 		if addrStr != "" {
-			addressInCache := false
-			for i := 0; i < len(blockCache.AddressTrxs); i++ {
-				if blockCache.AddressTrxs[i].AddressTrxKey == addrStr {
-					blockCache.AddressTrxs[i].AddressTrxValue[trxId.GetHex()] = 0
-					addressInCache = true
-					break
-				}
-			}
-			if !addressInCache {
-				addrTrxPair := AddressTrxPair{}
-				trxIds, err := addressTrxDBMgr.DBGet(addrStr)
-				if err != nil && err.Error() == LevelDBNotFound {
-					addrTrxPair = AddressTrxPair{addrStr, map[string]int{trxId.GetHex(): 0}, 0}
-				} else {
-					trxIds[trxId.GetHex()] = 0
-					addrTrxPair = AddressTrxPair{addrStr, trxIds, 0}
-				}
-				blockCache.AddAddressTrxPair(addrTrxPair)
-			}
+			// add to address trxs memory cache
+			addressTrxsMemCache.Add(addrStr, trxId)
+			blockCache.AddAddrChanged(addrStr)
 		}
 	}
 	// deal trx utxo pair
@@ -362,12 +365,22 @@ func doGatherUtxoType1(goroutine goroutine_mgr.Goroutine, args ...interface{}) {
 					quitFlag = true
 					break
 				}
+				err = storeChainIndexState("0")
+				if err != nil {
+					quitFlag = true
+					break
+				}
 				err = dealWithRawBlock(NewBlockHeight, &rawBlockData)
 				if err != nil {
 					quitFlag = true
 					break
 				}
 				if NewBlockHeight%config.CacheConfig.BlockCacheCount == 0 {
+					err = applyTrxsToBlockCache(blockCache)
+					if err != nil {
+						quitFlag = true
+						break
+					}
 					err = storeBlockCache(blockCache)
 					if err != nil {
 						quitFlag = true
@@ -378,17 +391,32 @@ func doGatherUtxoType1(goroutine goroutine_mgr.Goroutine, args ...interface{}) {
 						quitFlag = true
 						break
 					}
+					err = storeChainIndexState("1")
+					if err != nil {
+						quitFlag = true
+						break
+					}
 					blockCache = new(BlockCache)
 				}
 				startBlockHeight += 1
 			}
 			// need to flush block cache
+			err = applyTrxsToBlockCache(blockCache)
+			if err != nil {
+				quitFlag = true
+				break
+			}
 			err = storeBlockCache(blockCache)
 			if err != nil {
 				quitFlag = true
 				break
 			}
 			err = storeStartBlockHeight(startBlockHeight)
+			if err != nil {
+				quitFlag = true
+				break
+			}
+			err = storeChainIndexState("1")
 			if err != nil {
 				quitFlag = true
 				break
@@ -446,12 +474,22 @@ func doGatherUtxoType2(goroutine goroutine_mgr.Goroutine, args ...interface{}) {
 					quitFlag = true
 					break
 				}
+				err = storeChainIndexState("0")
+				if err != nil {
+					quitFlag = true
+					break
+				}
 				err = dealWithRawBlock(NewBlockHeight, &rawBlockData)
 				if err != nil {
 					quitFlag = true
 					break
 				}
 				if NewBlockHeight%config.CacheConfig.BlockCacheCount == 0 {
+					err = applyTrxsToBlockCache(blockCache)
+					if err != nil {
+						quitFlag = true
+						break
+					}
 					err = storeBlockCache(blockCache)
 					if err != nil {
 						quitFlag = true
@@ -462,17 +500,32 @@ func doGatherUtxoType2(goroutine goroutine_mgr.Goroutine, args ...interface{}) {
 						quitFlag = true
 						break
 					}
+					err = storeChainIndexState("1")
+					if err != nil {
+						quitFlag = true
+						break
+					}
 					blockCache = new(BlockCache)
 				}
 				startBlockHeight += 1
 			}
 			// need to flush block cache
+			err = applyTrxsToBlockCache(blockCache)
+			if err != nil {
+				quitFlag = true
+				break
+			}
 			err = storeBlockCache(blockCache)
 			if err != nil {
 				quitFlag = true
 				break
 			}
 			err = storeStartBlockHeight(startBlockHeight)
+			if err != nil {
+				quitFlag = true
+				break
+			}
+			err = storeChainIndexState("1")
 			if err != nil {
 				quitFlag = true
 				break
