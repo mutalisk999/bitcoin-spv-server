@@ -196,13 +196,18 @@ func storeStartBlockHeight(blockHeight uint32) error {
 
 func dealWithVinToCache(vin transaction.TxIn, trxId bigint.Uint256) error {
 	// deal trx utxo pair
-	// query from memory cache
+	// query from memory cache, if not found, query from leveldb
 	utxoSource := UtxoSource{vin.PrevOut.Hash, vin.PrevOut.N}
 	utxoDetail, ok := utxoMemCache.Get(utxoSource)
 	if !ok {
-		return errors.New("can not find prevout trxid: " + vin.PrevOut.Hash.GetHex() + ", vout: " + strconv.Itoa(int(vin.PrevOut.N)))
+		var err error
+		utxoDetail, err = trxUtxoDBMgr.DBGet(utxoSource)
+		if err != nil && err.Error() == LevelDBNotFound{
+			return errors.New("can not find prevout trxid: " + vin.PrevOut.Hash.GetHex() + ", vout: " + strconv.Itoa(int(vin.PrevOut.N)))
+		}
+	} else {
+		utxoMemCache.Remove(utxoSource)
 	}
-	utxoMemCache.Remove(utxoSource)
 
 	scriptPubKey := utxoDetail.ScriptPubKey
 	trxUtxoPair := new(TrxUtxoPair)
@@ -323,6 +328,34 @@ func dealWithRawBlock(blockHeight uint32, rawBlockData *string) error {
 	return nil
 }
 
+func removeColdUtxoFromCache(blockHeight uint32) {
+	if len(utxoMemCache.UtxoDetailMemMap) > 5000000 {
+		var needRemove []string
+		for utxoKey, utxoDetail := range utxoMemCache.UtxoDetailMemMap {
+			if blockHeight - utxoDetail.BlockHeight > 50000 {
+				needRemove = append(needRemove, utxoKey)
+			}
+		}
+		for _, utxoKey := range needRemove {
+			delete(utxoMemCache.UtxoDetailMemMap, utxoKey)
+		}
+	}
+}
+
+func removeColdAddressFromCache() {
+	if len(addressTrxsMemCache.AddressTrxsMap) > 5000000 {
+		var needRemove []string
+		for addrStr, trxs := range addressTrxsMemCache.AddressTrxsMap {
+			if len(trxs) <= 3 {
+				needRemove = append(needRemove, addrStr)
+			}
+		}
+		for _, addrStr := range needRemove {
+			delete(addressTrxsMemCache.AddressTrxsMap, addrStr)
+		}
+	}
+}
+
 func doGatherUtxoType1(goroutine goroutine_mgr.Goroutine, args ...interface{}) {
 	defer goroutine.OnQuit()
 	var err error
@@ -397,6 +430,10 @@ func doGatherUtxoType1(goroutine goroutine_mgr.Goroutine, args ...interface{}) {
 						break
 					}
 					blockCache = new(BlockCache)
+
+					// remove some cold utxo and address from cache to avoid too much memory usage
+					removeColdUtxoFromCache(NewBlockHeight)
+					removeColdAddressFromCache()
 				}
 				startBlockHeight += 1
 			}
@@ -506,6 +543,10 @@ func doGatherUtxoType2(goroutine goroutine_mgr.Goroutine, args ...interface{}) {
 						break
 					}
 					blockCache = new(BlockCache)
+
+					// remove some cold utxo and address from cache to avoid too much memory usage
+					removeColdUtxoFromCache(NewBlockHeight)
+					removeColdAddressFromCache()
 				}
 				startBlockHeight += 1
 			}

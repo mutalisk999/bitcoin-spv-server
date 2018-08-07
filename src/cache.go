@@ -76,9 +76,16 @@ func (a *AddressTrxsMemCache) Get(addrStr string) ([]bigint.Uint256, bool) {
 
 func (a *AddressTrxsMemCache) Add(addrStr string, trxId bigint.Uint256) {
 	trxIdsByAddr, ok := a.AddressTrxsMap[addrStr]
+	isNewAddr := false
 	if !ok {
-		a.AddressTrxsMap[addrStr] = []bigint.Uint256{trxId}
-	} else {
+		var err error
+		trxIdsByAddr, err = addressTrxDBMgr.DBGet(addrStr)
+		if err != nil && err.Error() == LevelDBNotFound{
+			a.AddressTrxsMap[addrStr] = []bigint.Uint256{trxId}
+			isNewAddr = true
+		}
+	}
+	if !isNewAddr {
 		isInTrxIds := false
 		for _, trxIdAddr := range trxIdsByAddr {
 			if bigint.IsUint256Equal(&trxIdAddr, &trxId) {
@@ -86,6 +93,7 @@ func (a *AddressTrxsMemCache) Add(addrStr string, trxId bigint.Uint256) {
 				break
 			}
 		}
+		// duplicated trxid
 		if !isInTrxIds {
 			trxIdsByAddr = append(trxIdsByAddr, trxId)
 			a.AddressTrxsMap[addrStr] = trxIdsByAddr
