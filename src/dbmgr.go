@@ -340,7 +340,7 @@ func (t TrxUtxoDBMgr) DBBatch(trxUtxos []TrxUtxoPair) error {
 	return nil
 }
 
-func (t TrxUtxoDBMgr) InitUtxoMemCache() error {
+func (t TrxUtxoDBMgr) InitUtxoMemCache(blockHeight uint32) error {
 	var err error
 	iter := t.db.NewIterator(nil, nil)
 	for iter.Next() {
@@ -355,6 +355,8 @@ func (t TrxUtxoDBMgr) InitUtxoMemCache() error {
 			return err
 		}
 		utxoMemCache.Add(utxoSrc, utxoDetail)
+		// in order to avoid too much memory usage
+		removeColdUtxoFromCache(blockHeight)
 	}
 	iter.Release()
 	err = iter.Error()
@@ -375,6 +377,8 @@ func (a AddressTrxDBMgr) InitAddressTrxsMemCache() error {
 			return err
 		}
 		addressTrxsMemCache.Set(string(bytesKey), trxIds)
+		// in order to avoid too much memory usage
+		removeColdAddressFromCache()
 	}
 	iter.Release()
 	err = iter.Error()

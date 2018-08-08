@@ -83,8 +83,14 @@ func appInit() error {
 		}
 	}
 
+	// get current block height
+	blockHeight, err := getStartBlockHeight()
+	if err != nil {
+		return err
+	}
+
 	// init utxo memory cache
-	err = trxUtxoDBMgr.InitUtxoMemCache()
+	err = trxUtxoDBMgr.InitUtxoMemCache(blockHeight)
 	if err != nil {
 		return err
 	}
