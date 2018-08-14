@@ -13,8 +13,8 @@ import (
 	"github.com/ybbus/jsonrpc"
 	"io"
 	"strconv"
-	"strings"
 	"time"
+	"strings"
 )
 
 func doHttpJsonRpcCallType1(method string, args ...interface{}) (*jsonrpc.RPCResponse, error) {
@@ -161,7 +161,7 @@ func applyTrxsToBlockCache(blockCache *BlockCache) error {
 		if !ok {
 			return errors.New("can not find trxs by addrStr in AddrChanged")
 		}
-		addressTrxPair := new(AddressTrxPair)
+		var addressTrxPair AddressTrxPair
 		addressTrxPair.AddressTrxKey = addrStr
 		addressTrxPair.AddressTrxValue = trxIds
 		addressTrxPair.AddressTrxOp = 0
@@ -197,7 +197,7 @@ func storeStartBlockHeight(blockHeight uint32) error {
 func dealWithVinToCache(vin transaction.TxIn, trxId bigint.Uint256) error {
 	// deal trx utxo pair
 	// query from memory cache, if not found, query from leveldb
-	utxoSource := new(UtxoSource)
+	var utxoSource UtxoSource
 	utxoSource.TrxId = vin.PrevOut.Hash
 	utxoSource.Vout = vin.PrevOut.N
 	utxoDetail, ok := utxoMemCache.Get(utxoSource)
@@ -212,7 +212,7 @@ func dealWithVinToCache(vin transaction.TxIn, trxId bigint.Uint256) error {
 	}
 
 	scriptPubKey := utxoDetail.ScriptPubKey
-	trxUtxoPair := new(TrxUtxoPair)
+	var trxUtxoPair TrxUtxoPair
 	trxUtxoPair.TrxUtxoKey = utxoSource
 	trxUtxoPair.TrxUtxoOp = 1
 	blockCache.AddTrxUtxoPair(trxUtxoPair)
@@ -255,17 +255,17 @@ func dealWithVoutToCache(blockHeight uint32, vout transaction.TxOut, trxId bigin
 		}
 	}
 	// deal trx utxo pair
-	utxoSource := new(UtxoSource)
+	var utxoSource UtxoSource
 	utxoSource.TrxId = trxId
 	utxoSource.Vout = index
 
-	utxoDetail := new(UtxoDetail)
+	var utxoDetail UtxoDetail
 	utxoDetail.Amount = vout.Value
 	utxoDetail.BlockHeight = blockHeight
 	utxoDetail.Address = addrStr
 	utxoDetail.ScriptPubKey = scriptPubKey
 
-	trxUtxoPair := new(TrxUtxoPair)
+	var trxUtxoPair TrxUtxoPair
 	trxUtxoPair.TrxUtxoKey = utxoSource
 	trxUtxoPair.TrxUtxoValue = utxoDetail
 	trxUtxoPair.TrxUtxoOp = 0
@@ -286,9 +286,9 @@ func dealWithRawTrxToCache(trxId bigint.Uint256, trx *transaction.Transaction) e
 		return err
 	}
 	rawTrxDate := bytesBuf.Bytes()
-	rawTrxPair := new(RawTrxPair)
+	var rawTrxPair RawTrxPair
 	rawTrxPair.TrxIdKey = trxId.GetHex()
-	rawTrxPair.RawTrxDataValue = &rawTrxDate
+	rawTrxPair.RawTrxDataValue = rawTrxDate
 	rawTrxPair.RawTrxOp = 0
 	blockCache.AddRawTrxPair(rawTrxPair)
 	return nil
@@ -328,7 +328,7 @@ func dealWithRawBlock(blockHeight uint32, rawBlockData *string) error {
 	}
 	bytesBuf := bytes.NewBuffer(blockBytes)
 	bufReader := io.Reader(bytesBuf)
-	blockNew := new(block.Block)
+	var blockNew block.Block
 	blockNew.UnPack(bufReader)
 	for i := 0; i < len(blockNew.Vtx); i++ {
 		isCoinBase := false
@@ -361,7 +361,7 @@ func removeColdAddressFromCache() {
 	if len(addressTrxsMemCache.AddressTrxsMap) > 5000000 {
 		var needRemove []string
 		for addrStr, trxs := range addressTrxsMemCache.AddressTrxsMap {
-			if len(*trxs) <= 3 {
+			if len(trxs) <= 3 {
 				needRemove = append(needRemove, addrStr)
 			}
 		}
@@ -444,8 +444,7 @@ func doGatherUtxoType1(goroutine goroutine_mgr.Goroutine, args ...interface{}) {
 						quitFlag = true
 						break
 					}
-					blockCache = new(BlockCache)
-					blockCache.initialize()
+					blockCache.Clear()
 
 					// remove some cold utxo and address from cache to avoid too much memory usage
 					removeColdUtxoFromCache(NewBlockHeight)
@@ -474,8 +473,7 @@ func doGatherUtxoType1(goroutine goroutine_mgr.Goroutine, args ...interface{}) {
 				quitFlag = true
 				break
 			}
-			blockCache = new(BlockCache)
-			blockCache.initialize()
+			blockCache.Clear()
 
 			// if break from the inside loop for, break from the outside loop for
 			if quitFlag == true {
@@ -559,8 +557,7 @@ func doGatherUtxoType2(goroutine goroutine_mgr.Goroutine, args ...interface{}) {
 						quitFlag = true
 						break
 					}
-					blockCache = new(BlockCache)
-					blockCache.initialize()
+					blockCache.Clear()
 
 					// remove some cold utxo and address from cache to avoid too much memory usage
 					removeColdUtxoFromCache(NewBlockHeight)
@@ -589,8 +586,7 @@ func doGatherUtxoType2(goroutine goroutine_mgr.Goroutine, args ...interface{}) {
 				quitFlag = true
 				break
 			}
-			blockCache = new(BlockCache)
-			blockCache.initialize()
+			blockCache.Clear()
 
 			// if break from the inside loop for, break from the outside loop for
 			if quitFlag == true {

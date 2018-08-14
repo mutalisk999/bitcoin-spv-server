@@ -44,17 +44,17 @@ type UtxoSourcePrintAble struct {
 }
 
 func (u *UtxoSource) GetUtxoSourcePrintAble() UtxoSourcePrintAble {
-	utxoSourcePrintAble := new(UtxoSourcePrintAble)
+	var utxoSourcePrintAble UtxoSourcePrintAble
 	utxoSourcePrintAble.TrxId = u.TrxId.GetHex()
 	utxoSourcePrintAble.Vout = u.Vout
-	return *utxoSourcePrintAble
+	return utxoSourcePrintAble
 }
 
 func (u *UtxoSourcePrintAble) GetUtxoSource() UtxoSource {
-	utxoSource := new(UtxoSource)
+	var utxoSource UtxoSource
 	utxoSource.TrxId.SetHex(u.TrxId)
 	utxoSource.Vout = u.Vout
-	return *utxoSource
+	return utxoSource
 }
 
 type UtxoDetail struct {
@@ -117,16 +117,16 @@ type UtxoDetailPrintAble struct {
 }
 
 func (u *UtxoDetail) GetUtxoDetailPrintAble() UtxoDetailPrintAble {
-	utxoDetailPrintAble := new(UtxoDetailPrintAble)
+	var utxoDetailPrintAble UtxoDetailPrintAble
 	utxoDetailPrintAble.Amount = u.Amount
 	utxoDetailPrintAble.BlockHeight = u.BlockHeight
 	utxoDetailPrintAble.Address = u.Address
 	utxoDetailPrintAble.ScriptPubKey = hex.EncodeToString(u.ScriptPubKey.GetScriptBytes())
-	return *utxoDetailPrintAble
+	return utxoDetailPrintAble
 }
 
 func (u *UtxoDetailPrintAble) GetUtxoDetail() (UtxoDetail, error) {
-	utxoDetail := new(UtxoDetail)
+	var utxoDetail UtxoDetail
 	utxoDetail.Amount = u.Amount
 	utxoDetail.BlockHeight = u.BlockHeight
 	utxoDetail.Address = u.Address
@@ -135,5 +135,5 @@ func (u *UtxoDetailPrintAble) GetUtxoDetail() (UtxoDetail, error) {
 		return UtxoDetail{}, err
 	}
 	utxoDetail.ScriptPubKey.SetScriptBytes(bytesScript)
-	return *utxoDetail, nil
+	return utxoDetail, nil
 }
