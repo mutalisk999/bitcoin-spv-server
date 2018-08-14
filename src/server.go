@@ -31,7 +31,7 @@ func (s *Service) GetAddressTrxs(r *http.Request, args *string, reply *[]string)
 	if err != nil {
 		return errors.New("address not found")
 	}
-	for _, trxId := range trxIds {
+	for _, trxId := range *trxIds {
 		*reply = append(*reply, trxId.GetHex())
 	}
 	return nil
@@ -65,7 +65,7 @@ func (s *Service) GetTrx(r *http.Request, args *string, reply *transaction.TrxPr
 
 func (s *Service) GetUtxo(r *http.Request, args *UtxoSourcePrintAble, reply *UtxoDetailPrintAble) error {
 	utxoSource := args.GetUtxoSource()
-	utxoDetail, err := trxUtxoDBMgr.DBGet(utxoSource)
+	utxoDetail, err := trxUtxoDBMgr.DBGet(&utxoSource)
 	if err != nil {
 		return errors.New("utxo source not found")
 	}
@@ -79,7 +79,7 @@ func (s *Service) ListUnSpent(r *http.Request, args *string, reply *[]UtxoDetail
 	if err != nil {
 		return errors.New("address not found")
 	}
-	for _, trxId := range trxIds {
+	for _, trxId := range *trxIds {
 		bytesRawTrx, err := rawTrxDBMgr.DBGet(trxId.GetHex())
 		if err != nil {
 			return errors.New("transaction id not found")
@@ -95,7 +95,7 @@ func (s *Service) ListUnSpent(r *http.Request, args *string, reply *[]UtxoDetail
 			utxoSource := new(UtxoSource)
 			utxoSource.TrxId = trxId
 			utxoSource.Vout = uint32(i)
-			utxoDetail, err := trxUtxoDBMgr.DBGet(*utxoSource)
+			utxoDetail, err := trxUtxoDBMgr.DBGet(utxoSource)
 			if err != nil {
 				return errors.New("utxo source not found")
 			}

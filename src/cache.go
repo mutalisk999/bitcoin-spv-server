@@ -6,55 +6,53 @@ import (
 )
 
 type BlockCache struct {
-	AddressTrxs []AddressTrxPair
-	TrxUtxos    []TrxUtxoPair
-	RawTrxs     []RawTrxPair
-	AddrChanged []string
+	AddressTrxs []*AddressTrxPair
+	TrxUtxos    []*TrxUtxoPair
+	RawTrxs     []*RawTrxPair
+	AddrChanged map[string]int
 }
 
-func (b *BlockCache) AddAddressTrxPair(addressTrxPair AddressTrxPair) {
+func (b *BlockCache) initialize() {
+	b.AddressTrxs = make([]*AddressTrxPair, 0, 50000)
+	b.TrxUtxos = make([]*TrxUtxoPair, 0, 50000)
+	b.RawTrxs = make([]*RawTrxPair, 0, 50000)
+	b.AddrChanged = make(map[string]int)
+}
+
+func (b *BlockCache) AddAddressTrxPair(addressTrxPair *AddressTrxPair) {
 	b.AddressTrxs = append(b.AddressTrxs, addressTrxPair)
 }
 
-func (b *BlockCache) AddTrxUtxoPair(trxUtxoPair TrxUtxoPair) {
+func (b *BlockCache) AddTrxUtxoPair(trxUtxoPair *TrxUtxoPair) {
 	b.TrxUtxos = append(b.TrxUtxos, trxUtxoPair)
 }
 
-func (b *BlockCache) AddRawTrxPair(rawTrxPair RawTrxPair) {
+func (b *BlockCache) AddRawTrxPair(rawTrxPair *RawTrxPair) {
 	b.RawTrxs = append(b.RawTrxs, rawTrxPair)
 }
 
 func (b *BlockCache) AddAddrChanged(addrStr string) {
-	isInAddressCache := false
-	for _, addr := range b.AddrChanged {
-		if addrStr == addr {
-			isInAddressCache = true
-			break
-		}
-	}
-	if !isInAddressCache {
-		b.AddrChanged = append(b.AddrChanged, addrStr)
-	}
+	b.AddrChanged[addrStr] = 0
 }
 
 var blockCache *BlockCache
 
 type UtxoMemCache struct {
-	UtxoDetailMemMap map[string]UtxoDetail
+	UtxoDetailMemMap map[string]*UtxoDetail
 }
 
-func (u UtxoMemCache) Get(utxoSrc UtxoSource) (UtxoDetail, bool) {
+func (u UtxoMemCache) Get(utxoSrc *UtxoSource) (*UtxoDetail, bool) {
 	memCacheKey := utxoSrc.TrxId.GetHex() + "," + strconv.Itoa(int(utxoSrc.Vout))
 	utxoDetail, ok := u.UtxoDetailMemMap[memCacheKey]
 	return utxoDetail, ok
 }
 
-func (u *UtxoMemCache) Add(utxoSrc UtxoSource, utxoDetail UtxoDetail) {
+func (u *UtxoMemCache) Add(utxoSrc *UtxoSource, utxoDetail *UtxoDetail) {
 	memCacheKey := utxoSrc.TrxId.GetHex() + "," + strconv.Itoa(int(utxoSrc.Vout))
 	u.UtxoDetailMemMap[memCacheKey] = utxoDetail
 }
 
-func (u *UtxoMemCache) Remove(utxoSrc UtxoSource) {
+func (u *UtxoMemCache) Remove(utxoSrc *UtxoSource) {
 	memCacheKey := utxoSrc.TrxId.GetHex() + "," + strconv.Itoa(int(utxoSrc.Vout))
 	delete(u.UtxoDetailMemMap, memCacheKey)
 }
@@ -62,14 +60,14 @@ func (u *UtxoMemCache) Remove(utxoSrc UtxoSource) {
 var utxoMemCache *UtxoMemCache
 
 type AddressTrxsMemCache struct {
-	AddressTrxsMap map[string][]bigint.Uint256
+	AddressTrxsMap map[string]*[]bigint.Uint256
 }
 
-func (a *AddressTrxsMemCache) Set(addrStr string, trxIds []bigint.Uint256) {
+func (a *AddressTrxsMemCache) Set(addrStr string, trxIds *[]bigint.Uint256) {
 	a.AddressTrxsMap[addrStr] = trxIds
 }
 
-func (a *AddressTrxsMemCache) Get(addrStr string) ([]bigint.Uint256, bool) {
+func (a *AddressTrxsMemCache) Get(addrStr string) (*[]bigint.Uint256, bool) {
 	trxIds, ok := a.AddressTrxsMap[addrStr]
 	return trxIds, ok
 }
@@ -80,14 +78,16 @@ func (a *AddressTrxsMemCache) Add(addrStr string, trxId bigint.Uint256) {
 	if !ok {
 		var err error
 		trxIdsByAddr, err = addressTrxDBMgr.DBGet(addrStr)
-		if err != nil && err.Error() == LevelDBNotFound{
-			a.AddressTrxsMap[addrStr] = []bigint.Uint256{trxId}
+		if err != nil && err.Error() == LevelDBNotFound {
+			trxIds := make([]bigint.Uint256, 0, 1000)
+			trxIds = append(trxIds, trxId)
+			a.AddressTrxsMap[addrStr] = &trxIds
 			isNewAddr = true
 		}
 	}
 	if !isNewAddr {
 		isInTrxIds := false
-		for _, trxIdAddr := range trxIdsByAddr {
+		for _, trxIdAddr := range *trxIdsByAddr {
 			if bigint.IsUint256Equal(&trxIdAddr, &trxId) {
 				isInTrxIds = true
 				break
@@ -95,7 +95,7 @@ func (a *AddressTrxsMemCache) Add(addrStr string, trxId bigint.Uint256) {
 		}
 		// duplicated trxid
 		if !isInTrxIds {
-			trxIdsByAddr = append(trxIdsByAddr, trxId)
+			*trxIdsByAddr = append(*trxIdsByAddr, trxId)
 			a.AddressTrxsMap[addrStr] = trxIdsByAddr
 		}
 	}

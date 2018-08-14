@@ -27,7 +27,7 @@ type AddressTrxDBMgr struct {
 
 type AddressTrxPair struct {
 	AddressTrxKey   string
-	AddressTrxValue []bigint.Uint256
+	AddressTrxValue *[]bigint.Uint256
 	AddressTrxOp    byte // 0 put, 1 delete
 }
 
@@ -36,8 +36,8 @@ type TrxUtxoDBMgr struct {
 }
 
 type TrxUtxoPair struct {
-	TrxUtxoKey   UtxoSource
-	TrxUtxoValue UtxoDetail
+	TrxUtxoKey   *UtxoSource
+	TrxUtxoValue *UtxoDetail
 	TrxUtxoOp    byte // 0 put, 1 delete
 }
 
@@ -47,7 +47,7 @@ type RawTrxDBMgr struct {
 
 type RawTrxPair struct {
 	TrxIdKey        string
-	RawTrxDataValue []byte
+	RawTrxDataValue *[]byte
 	RawTrxOp        byte // 0 put, 1 delete
 }
 
@@ -127,14 +127,14 @@ func (a *AddressTrxDBMgr) DBClose() error {
 	return nil
 }
 
-func trxIdsToBytes(trxIds []bigint.Uint256) ([]byte, error) {
+func trxIdsToBytes(trxIds *[]bigint.Uint256) ([]byte, error) {
 	bytesBuf := bytes.NewBuffer([]byte{})
 	bufWriter := io.Writer(bytesBuf)
-	err := serialize.PackCompactSize(bufWriter, uint64(len(trxIds)))
+	err := serialize.PackCompactSize(bufWriter, uint64(len(*trxIds)))
 	if err != nil {
 		return []byte{}, err
 	}
-	for _, trxId := range trxIds {
+	for _, trxId := range *trxIds {
 		err = trxId.Pack(bufWriter)
 		if err != nil {
 			return []byte{}, err
@@ -143,25 +143,25 @@ func trxIdsToBytes(trxIds []bigint.Uint256) ([]byte, error) {
 	return bytesBuf.Bytes(), nil
 }
 
-func trxIdsFromBytes(bytesTrxIds []byte) ([]bigint.Uint256, error) {
-	var trxIds []bigint.Uint256
+func trxIdsFromBytes(bytesTrxIds []byte) (*[]bigint.Uint256, error) {
 	bufReader := io.Reader(bytes.NewBuffer(bytesTrxIds))
 	ui64, err := serialize.UnPackCompactSize(bufReader)
 	if err != nil {
-		return []bigint.Uint256{}, err
+		return nil, err
 	}
+	trxIds := make([]bigint.Uint256, 0, ui64)
 	for i := 0; i < int(ui64); i++ {
 		var trxId bigint.Uint256
 		err = trxId.UnPack(bufReader)
 		if err != nil {
-			return []bigint.Uint256{}, err
+			return nil, err
 		}
 		trxIds = append(trxIds, trxId)
 	}
-	return trxIds, nil
+	return &trxIds, nil
 }
 
-func (a AddressTrxDBMgr) DBPut(key string, value []bigint.Uint256) error {
+func (a AddressTrxDBMgr) DBPut(key string, value *[]bigint.Uint256) error {
 	bytesValue, err := trxIdsToBytes(value)
 	if err != nil {
 		return err
@@ -173,10 +173,10 @@ func (a AddressTrxDBMgr) DBPut(key string, value []bigint.Uint256) error {
 	return nil
 }
 
-func (a AddressTrxDBMgr) DBGet(key string) ([]bigint.Uint256, error) {
+func (a AddressTrxDBMgr) DBGet(key string) (*[]bigint.Uint256, error) {
 	bytesValue, err := a.db.Get([]byte(key), nil)
 	if err != nil {
-		return []bigint.Uint256{}, err
+		return nil, err
 	}
 	trxIds, err := trxIdsFromBytes(bytesValue)
 	return trxIds, nil
@@ -190,7 +190,7 @@ func (a AddressTrxDBMgr) DBDelete(key string) error {
 	return nil
 }
 
-func (a AddressTrxDBMgr) DBBatch(addressTrxs []AddressTrxPair) error {
+func (a AddressTrxDBMgr) DBBatch(addressTrxs []*AddressTrxPair) error {
 	batch := new(leveldb.Batch)
 	for _, addressTrx := range addressTrxs {
 		if addressTrx.AddressTrxOp == 0 {
@@ -229,7 +229,7 @@ func (t *TrxUtxoDBMgr) DBClose() error {
 	return nil
 }
 
-func utxoSrcToBytes(utxoSrc UtxoSource) ([]byte, error) {
+func utxoSrcToBytes(utxoSrc *UtxoSource) ([]byte, error) {
 	bytesBuf := bytes.NewBuffer([]byte{})
 	bufWriter := io.Writer(bytesBuf)
 	err := utxoSrc.Pack(bufWriter)
@@ -239,17 +239,17 @@ func utxoSrcToBytes(utxoSrc UtxoSource) ([]byte, error) {
 	return bytesBuf.Bytes(), nil
 }
 
-func utxoSrcFromBytes(bytesUtxoSrc []byte) (UtxoSource, error) {
-	var utxoSrc UtxoSource
+func utxoSrcFromBytes(bytesUtxoSrc []byte) (*UtxoSource, error) {
+	utxoSrc := new(UtxoSource)
 	bufReader := io.Reader(bytes.NewBuffer(bytesUtxoSrc))
 	err := utxoSrc.UnPack(bufReader)
 	if err != nil {
-		return UtxoSource{}, err
+		return nil, err
 	}
 	return utxoSrc, nil
 }
 
-func utxoDetailToBytes(utxoDetail UtxoDetail) ([]byte, error) {
+func utxoDetailToBytes(utxoDetail *UtxoDetail) ([]byte, error) {
 	bytesBuf := bytes.NewBuffer([]byte{})
 	bufWriter := io.Writer(bytesBuf)
 	err := utxoDetail.Pack(bufWriter)
@@ -259,17 +259,17 @@ func utxoDetailToBytes(utxoDetail UtxoDetail) ([]byte, error) {
 	return bytesBuf.Bytes(), nil
 }
 
-func utxoDetailFromBytes(bytesUtxoDetail []byte) (UtxoDetail, error) {
-	var utxoDetail UtxoDetail
+func utxoDetailFromBytes(bytesUtxoDetail []byte) (*UtxoDetail, error) {
+	utxoDetail := new(UtxoDetail)
 	bufReader := io.Reader(bytes.NewBuffer(bytesUtxoDetail))
 	err := utxoDetail.UnPack(bufReader)
 	if err != nil {
-		return UtxoDetail{}, err
+		return nil, err
 	}
 	return utxoDetail, nil
 }
 
-func (t TrxUtxoDBMgr) DBPut(key UtxoSource, value UtxoDetail) error {
+func (t TrxUtxoDBMgr) DBPut(key *UtxoSource, value *UtxoDetail) error {
 	bytesKey, err := utxoSrcToBytes(key)
 	if err != nil {
 		return err
@@ -285,20 +285,20 @@ func (t TrxUtxoDBMgr) DBPut(key UtxoSource, value UtxoDetail) error {
 	return nil
 }
 
-func (t TrxUtxoDBMgr) DBGet(key UtxoSource) (UtxoDetail, error) {
+func (t TrxUtxoDBMgr) DBGet(key *UtxoSource) (*UtxoDetail, error) {
 	bytesKey, err := utxoSrcToBytes(key)
 	if err != nil {
-		return UtxoDetail{}, err
+		return nil, err
 	}
 	bytesValue, err := t.db.Get(bytesKey, nil)
 	if err != nil {
-		return UtxoDetail{}, err
+		return nil, err
 	}
 	utxoDetail, err := utxoDetailFromBytes(bytesValue)
 	return utxoDetail, nil
 }
 
-func (t TrxUtxoDBMgr) DBDelete(key UtxoSource) error {
+func (t TrxUtxoDBMgr) DBDelete(key *UtxoSource) error {
 	bytesKey, err := utxoSrcToBytes(key)
 	if err != nil {
 		return err
@@ -310,7 +310,7 @@ func (t TrxUtxoDBMgr) DBDelete(key UtxoSource) error {
 	return nil
 }
 
-func (t TrxUtxoDBMgr) DBBatch(trxUtxos []TrxUtxoPair) error {
+func (t TrxUtxoDBMgr) DBBatch(trxUtxos []*TrxUtxoPair) error {
 	batch := new(leveldb.Batch)
 	for _, trxUtxo := range trxUtxos {
 		if trxUtxo.TrxUtxoOp == 0 {
@@ -421,11 +421,11 @@ func (r RawTrxDBMgr) DBGet(key string) ([]byte, error) {
 	return bytesValue, nil
 }
 
-func (r RawTrxDBMgr) DBBatch(rawTrxs []RawTrxPair) error {
+func (r RawTrxDBMgr) DBBatch(rawTrxs []*RawTrxPair) error {
 	batch := new(leveldb.Batch)
 	for _, rawTrx := range rawTrxs {
 		if rawTrx.RawTrxOp == 0 {
-			batch.Put([]byte(rawTrx.TrxIdKey), rawTrx.RawTrxDataValue)
+			batch.Put([]byte(rawTrx.TrxIdKey), *rawTrx.RawTrxDataValue)
 		} else if rawTrx.RawTrxOp == 1 {
 			batch.Delete([]byte(rawTrx.TrxIdKey))
 		} else {

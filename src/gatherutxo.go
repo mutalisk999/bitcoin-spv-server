@@ -156,7 +156,7 @@ func storeChainIndexState(state string) error {
 }
 
 func applyTrxsToBlockCache(blockCache *BlockCache) error {
-	for _, addrStr := range blockCache.AddrChanged {
+	for addrStr, _ := range blockCache.AddrChanged {
 		trxIds, ok := addressTrxsMemCache.Get(addrStr)
 		if !ok {
 			return errors.New("can not find trxs by addrStr in AddrChanged")
@@ -165,7 +165,7 @@ func applyTrxsToBlockCache(blockCache *BlockCache) error {
 		addressTrxPair.AddressTrxKey = addrStr
 		addressTrxPair.AddressTrxValue = trxIds
 		addressTrxPair.AddressTrxOp = 0
-		blockCache.AddAddressTrxPair(*addressTrxPair)
+		blockCache.AddAddressTrxPair(addressTrxPair)
 	}
 	return nil
 }
@@ -197,12 +197,14 @@ func storeStartBlockHeight(blockHeight uint32) error {
 func dealWithVinToCache(vin transaction.TxIn, trxId bigint.Uint256) error {
 	// deal trx utxo pair
 	// query from memory cache, if not found, query from leveldb
-	utxoSource := UtxoSource{vin.PrevOut.Hash, vin.PrevOut.N}
+	utxoSource := new(UtxoSource)
+	utxoSource.TrxId = vin.PrevOut.Hash
+	utxoSource.Vout = vin.PrevOut.N
 	utxoDetail, ok := utxoMemCache.Get(utxoSource)
 	if !ok {
 		var err error
 		utxoDetail, err = trxUtxoDBMgr.DBGet(utxoSource)
-		if err != nil && err.Error() == LevelDBNotFound{
+		if err != nil && err.Error() == LevelDBNotFound {
 			return errors.New("can not find prevout trxid: " + vin.PrevOut.Hash.GetHex() + ", vout: " + strconv.Itoa(int(vin.PrevOut.N)))
 		}
 	} else {
@@ -213,7 +215,7 @@ func dealWithVinToCache(vin transaction.TxIn, trxId bigint.Uint256) error {
 	trxUtxoPair := new(TrxUtxoPair)
 	trxUtxoPair.TrxUtxoKey = utxoSource
 	trxUtxoPair.TrxUtxoOp = 1
-	blockCache.AddTrxUtxoPair(*trxUtxoPair)
+	blockCache.AddTrxUtxoPair(trxUtxoPair)
 
 	// deal address trx pair
 	isSucc, scriptType, addresses := script.ExtractDestination(scriptPubKey)
@@ -253,13 +255,22 @@ func dealWithVoutToCache(blockHeight uint32, vout transaction.TxOut, trxId bigin
 		}
 	}
 	// deal trx utxo pair
-	utxoSource := UtxoSource{trxId, index}
-	utxoDetail := UtxoDetail{vout.Value, blockHeight, addrStr, scriptPubKey}
+	utxoSource := new(UtxoSource)
+	utxoSource.TrxId = trxId
+	utxoSource.Vout = index
+
+	utxoDetail := new(UtxoDetail)
+	utxoDetail.Amount = vout.Value
+	utxoDetail.BlockHeight = blockHeight
+	utxoDetail.Address = addrStr
+	utxoDetail.ScriptPubKey = scriptPubKey
+
 	trxUtxoPair := new(TrxUtxoPair)
 	trxUtxoPair.TrxUtxoKey = utxoSource
 	trxUtxoPair.TrxUtxoValue = utxoDetail
 	trxUtxoPair.TrxUtxoOp = 0
-	blockCache.AddTrxUtxoPair(*trxUtxoPair)
+
+	blockCache.AddTrxUtxoPair(trxUtxoPair)
 
 	// add to memory cache
 	utxoMemCache.Add(utxoSource, utxoDetail)
@@ -274,7 +285,11 @@ func dealWithRawTrxToCache(trxId bigint.Uint256, trx *transaction.Transaction) e
 	if err != nil {
 		return err
 	}
-	rawTrxPair := RawTrxPair{trxId.GetHex(), bytesBuf.Bytes(), 0}
+	rawTrxDate := bytesBuf.Bytes()
+	rawTrxPair := new(RawTrxPair)
+	rawTrxPair.TrxIdKey = trxId.GetHex()
+	rawTrxPair.RawTrxDataValue = &rawTrxDate
+	rawTrxPair.RawTrxOp = 0
 	blockCache.AddRawTrxPair(rawTrxPair)
 	return nil
 }
@@ -332,7 +347,7 @@ func removeColdUtxoFromCache(blockHeight uint32) {
 	if len(utxoMemCache.UtxoDetailMemMap) > 5000000 {
 		var needRemove []string
 		for utxoKey, utxoDetail := range utxoMemCache.UtxoDetailMemMap {
-			if blockHeight - utxoDetail.BlockHeight > 50000 {
+			if blockHeight-utxoDetail.BlockHeight > 50000 {
 				needRemove = append(needRemove, utxoKey)
 			}
 		}
@@ -346,7 +361,7 @@ func removeColdAddressFromCache() {
 	if len(addressTrxsMemCache.AddressTrxsMap) > 5000000 {
 		var needRemove []string
 		for addrStr, trxs := range addressTrxsMemCache.AddressTrxsMap {
-			if len(trxs) <= 3 {
+			if len(*trxs) <= 3 {
 				needRemove = append(needRemove, addrStr)
 			}
 		}
@@ -430,6 +445,7 @@ func doGatherUtxoType1(goroutine goroutine_mgr.Goroutine, args ...interface{}) {
 						break
 					}
 					blockCache = new(BlockCache)
+					blockCache.initialize()
 
 					// remove some cold utxo and address from cache to avoid too much memory usage
 					removeColdUtxoFromCache(NewBlockHeight)
@@ -459,6 +475,7 @@ func doGatherUtxoType1(goroutine goroutine_mgr.Goroutine, args ...interface{}) {
 				break
 			}
 			blockCache = new(BlockCache)
+			blockCache.initialize()
 
 			// if break from the inside loop for, break from the outside loop for
 			if quitFlag == true {
@@ -543,6 +560,7 @@ func doGatherUtxoType2(goroutine goroutine_mgr.Goroutine, args ...interface{}) {
 						break
 					}
 					blockCache = new(BlockCache)
+					blockCache.initialize()
 
 					// remove some cold utxo and address from cache to avoid too much memory usage
 					removeColdUtxoFromCache(NewBlockHeight)
@@ -572,6 +590,7 @@ func doGatherUtxoType2(goroutine goroutine_mgr.Goroutine, args ...interface{}) {
 				break
 			}
 			blockCache = new(BlockCache)
+			blockCache.initialize()
 
 			// if break from the inside loop for, break from the outside loop for
 			if quitFlag == true {

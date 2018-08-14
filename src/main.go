@@ -8,6 +8,7 @@ import (
 	"github.com/mutalisk999/go-lib/src/sched/goroutine_mgr"
 	"os"
 	"strings"
+	_ "net/http/pprof"
 )
 
 var goroutineMgr *goroutine_mgr.GoroutineManager
@@ -30,14 +31,15 @@ func appInit() error {
 
 	// init block cache
 	blockCache = new(BlockCache)
+	blockCache.initialize()
 
 	// init utxo memory cache
 	utxoMemCache = new(UtxoMemCache)
-	utxoMemCache.UtxoDetailMemMap = make(map[string]UtxoDetail)
+	utxoMemCache.UtxoDetailMemMap = make(map[string]*UtxoDetail)
 
 	// init address trxs memory cache
 	addressTrxsMemCache = new(AddressTrxsMemCache)
-	addressTrxsMemCache.AddressTrxsMap = make(map[string][]bigint.Uint256)
+	addressTrxsMemCache.AddressTrxsMap = make(map[string]*[]bigint.Uint256)
 
 	// init goroutine manager
 	goroutineMgr = new(goroutine_mgr.GoroutineManager)
@@ -169,6 +171,14 @@ func appCmd() error {
 
 func main() {
 	var err error
+
+	//go func(){
+	//	http.ListenAndServe("0.0.0.0:8080", nil)
+	//}()
+
+	//cpuf, _ := os.Create("cpu_profile")
+	//pprof.StartCPUProfile(cpuf)
+	//defer pprof.StopCPUProfile()
 
 	// init config
 	jsonParser := new(JsonStruct)
