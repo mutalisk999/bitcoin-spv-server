@@ -89,23 +89,31 @@ func (a *AddressTrxsMemCache) Get(addrStr string) ([]bigint.Uint256, bool) {
 	return trxIds, ok
 }
 
-func (a *AddressTrxsMemCache) Add(addrStr string, trxId bigint.Uint256) {
+func (a *AddressTrxsMemCache) Add(addrStr string, trxId bigint.Uint256) error {
 	trxIdsMapByAddr, ok := a.AddressTrxsMap[addrStr]
-	isNewAddr := false
 	if !ok {
-		var err error
-		_, err = addressTrxDBMgr.DBGet(addrStr)
-		if err != nil && err.Error() == LevelDBNotFound {
-			trxIds := make(map[string]int)
-			trxIds[trxId.GetHex()] = 0
-			a.AddressTrxsMap[addrStr] = trxIds
-			isNewAddr = true
+		trxIdsDB, err := addressTrxDBMgr.DBGet(addrStr)
+		if err != nil {
+			if err.Error() == LevelDBNotFound {
+				trxIdsMapByAddr = make(map[string]int)
+				trxIdsMapByAddr[trxId.GetHex()] = 0
+				a.AddressTrxsMap[addrStr] = trxIdsMapByAddr
+			} else {
+				return err
+			}
+		} else {
+			trxIdsMapByAddr = make(map[string]int)
+			for _, trxIdDB := range trxIdsDB {
+				trxIdsMapByAddr[trxIdDB.GetHex()] = 0
+			}
+			trxIdsMapByAddr[trxId.GetHex()] = 0
+			a.AddressTrxsMap[addrStr] = trxIdsMapByAddr
 		}
-	}
-	if !isNewAddr {
+	} else {
 		trxIdsMapByAddr[trxId.GetHex()] = 0
 		a.AddressTrxsMap[addrStr] = trxIdsMapByAddr
 	}
+	return nil
 }
 
 var addressTrxsMemCache *AddressTrxsMemCache

@@ -228,7 +228,10 @@ func dealWithVinToCache(vin transaction.TxIn, trxId bigint.Uint256) error {
 		}
 		if addrStr != "" {
 			// add to address trxs memory cache
-			addressTrxsMemCache.Add(addrStr, trxId)
+			err := addressTrxsMemCache.Add(addrStr, trxId)
+			if err != nil {
+				return err
+			}
 			blockCache.AddAddrChanged(addrStr)
 		}
 	}
@@ -250,7 +253,10 @@ func dealWithVoutToCache(blockHeight uint32, vout transaction.TxOut, trxId bigin
 		}
 		if addrStr != "" {
 			// add to address trxs memory cache
-			addressTrxsMemCache.Add(addrStr, trxId)
+			err := addressTrxsMemCache.Add(addrStr, trxId)
+			if err != nil {
+				return err
+			}
 			blockCache.AddAddrChanged(addrStr)
 		}
 	}
