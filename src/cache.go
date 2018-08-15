@@ -67,43 +67,44 @@ func (u *UtxoMemCache) Remove(utxoSrc UtxoSource) {
 var utxoMemCache *UtxoMemCache
 
 type AddressTrxsMemCache struct {
-	AddressTrxsMap map[string][]bigint.Uint256
+	AddressTrxsMap map[string]map[string]int
 }
 
 func (a *AddressTrxsMemCache) Set(addrStr string, trxIds []bigint.Uint256) {
-	a.AddressTrxsMap[addrStr] = trxIds
+	trxIdsMap := make(map[string]int)
+	for _, trxId := range trxIds {
+		trxIdsMap[trxId.GetHex()] = 0
+	}
+	a.AddressTrxsMap[addrStr] = trxIdsMap
 }
 
 func (a *AddressTrxsMemCache) Get(addrStr string) ([]bigint.Uint256, bool) {
-	trxIds, ok := a.AddressTrxsMap[addrStr]
+	var trxIds []bigint.Uint256
+	trxIdsMap, ok := a.AddressTrxsMap[addrStr]
+	for trxIdStr, _ := range trxIdsMap {
+		var trxId bigint.Uint256
+		trxId.SetHex(trxIdStr)
+		trxIds = append(trxIds, trxId)
+	}
 	return trxIds, ok
 }
 
 func (a *AddressTrxsMemCache) Add(addrStr string, trxId bigint.Uint256) {
-	trxIdsByAddr, ok := a.AddressTrxsMap[addrStr]
+	trxIdsMapByAddr, ok := a.AddressTrxsMap[addrStr]
 	isNewAddr := false
 	if !ok {
 		var err error
-		trxIdsByAddr, err = addressTrxDBMgr.DBGet(addrStr)
+		_, err = addressTrxDBMgr.DBGet(addrStr)
 		if err != nil && err.Error() == LevelDBNotFound {
-			trxIds := []bigint.Uint256{trxId}
+			trxIds := make(map[string]int)
+			trxIds[trxId.GetHex()] = 0
 			a.AddressTrxsMap[addrStr] = trxIds
 			isNewAddr = true
 		}
 	}
 	if !isNewAddr {
-		isInTrxIds := false
-		for _, trxIdAddr := range trxIdsByAddr {
-			if bigint.IsUint256Equal(&trxIdAddr, &trxId) {
-				isInTrxIds = true
-				break
-			}
-		}
-		// duplicated trxid
-		if !isInTrxIds {
-			trxIdsByAddr = append(trxIdsByAddr, trxId)
-			a.AddressTrxsMap[addrStr] = trxIdsByAddr
-		}
+		trxIdsMapByAddr[trxId.GetHex()] = 0
+		a.AddressTrxsMap[addrStr] = trxIdsMapByAddr
 	}
 }
 

@@ -4,12 +4,11 @@ import (
 	"bufio"
 	"errors"
 	"fmt"
-	"github.com/mutalisk999/bitcoin-lib/src/bigint"
 	"github.com/mutalisk999/go-lib/src/sched/goroutine_mgr"
+	"net/http"
+	_ "net/http/pprof"
 	"os"
 	"strings"
-	_ "net/http/pprof"
-	"net/http"
 )
 
 var goroutineMgr *goroutine_mgr.GoroutineManager
@@ -40,7 +39,7 @@ func appInit() error {
 
 	// init address trxs memory cache
 	addressTrxsMemCache = new(AddressTrxsMemCache)
-	addressTrxsMemCache.AddressTrxsMap = make(map[string][]bigint.Uint256)
+	addressTrxsMemCache.AddressTrxsMap = make(map[string]map[string]int)
 
 	// init goroutine manager
 	goroutineMgr = new(goroutine_mgr.GoroutineManager)
@@ -173,7 +172,7 @@ func appCmd() error {
 func main() {
 	var err error
 
-	go func(){
+	go func() {
 		http.ListenAndServe("0.0.0.0:8080", nil)
 	}()
 

@@ -149,14 +149,14 @@ func trxIdsFromBytes(bytesTrxIds []byte) ([]bigint.Uint256, error) {
 	if err != nil {
 		return nil, err
 	}
-	var trxIds []bigint.Uint256
+	trxIds := make([]bigint.Uint256, ui64, ui64)
 	for i := 0; i < int(ui64); i++ {
 		var trxId bigint.Uint256
 		err = trxId.UnPack(bufReader)
 		if err != nil {
 			return nil, err
 		}
-		trxIds = append(trxIds, trxId)
+		trxIds[i] = trxId
 	}
 	return trxIds, nil
 }

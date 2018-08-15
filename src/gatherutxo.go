@@ -13,8 +13,8 @@ import (
 	"github.com/ybbus/jsonrpc"
 	"io"
 	"strconv"
-	"time"
 	"strings"
+	"time"
 )
 
 func doHttpJsonRpcCallType1(method string, args ...interface{}) (*jsonrpc.RPCResponse, error) {
@@ -313,9 +313,11 @@ func dealWithTrxToCache(blockHeight uint32, trx *transaction.Transaction, isCoin
 			return err
 		}
 	}
-	err = dealWithRawTrxToCache(trxId, trx)
-	if err != nil {
-		return err
+	if config.GatherConfig.StoreRawTrx {
+		err = dealWithRawTrxToCache(trxId, trx)
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil

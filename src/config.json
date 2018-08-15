@@ -5,6 +5,9 @@
   "cacheConfig":{
     "blockCacheCount":10
   },
+  "gatherConfig":{
+    "storeRawTrx": false
+  },
   "rpcClientConfig":{
     "dataSource":"rawBlock",
     "btcWallet": {

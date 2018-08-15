@@ -13,6 +13,10 @@ type CacheConfig struct {
 	BlockCacheCount uint32 `json:"blockCacheCount"`
 }
 
+type GatherConfig struct {
+	StoreRawTrx bool `json:"storeRawTrx"`
+}
+
 type BtcWalletConfig struct {
 	RpcReqUrl string `json:"rpcReqUrl"`
 }
@@ -34,6 +38,7 @@ type RpcServerConfig struct {
 type Config struct {
 	DBConfig        DBConfig        `json:"dbConfig"`
 	CacheConfig     CacheConfig     `json:"cacheConfig"`
+	GatherConfig    GatherConfig    `json:"gatherConfig"`
 	RpcClientConfig RpcClientConfig `json:"rpcClientConfig"`
 	RpcServerConfig RpcServerConfig `json:"rpcServerConfig"`
 }
