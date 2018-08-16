@@ -433,6 +433,8 @@ func doGatherUtxoType1(goroutine goroutine_mgr.Goroutine, args ...interface{}) {
 					break
 				}
 				if (slotCache.CalcObjectCacheWeight() > config.CacheConfig.ObjectCacheWeightMax) || (startBlockHeight > blockCount-20) {
+					fmt.Println("startBlockHeight:", startBlockHeight)
+					fmt.Println("Weight", slotCache.CalcObjectCacheWeight())
 					err = applyToPendingCache(slotCache, pendingCache)
 					if err != nil {
 						quitFlag = true
@@ -544,7 +546,7 @@ func doGatherUtxoType2(goroutine goroutine_mgr.Goroutine, args ...interface{}) {
 					break
 				}
 				if (slotCache.CalcObjectCacheWeight() > config.CacheConfig.ObjectCacheWeightMax) || (startBlockHeight > blockCount-20) {
-					fmt.Println("startBlockHeight:", startBlockHeight, ", flush")
+					fmt.Println("startBlockHeight:", startBlockHeight)
 					fmt.Println("Weight", slotCache.CalcObjectCacheWeight())
 					err = applyToPendingCache(slotCache, pendingCache)
 					if err != nil {
