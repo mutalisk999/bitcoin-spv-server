@@ -10,7 +10,7 @@ type DBConfig struct {
 }
 
 type CacheConfig struct {
-	BlockCacheCount uint32 `json:"blockCacheCount"`
+	ObjectCacheWeightMax uint32 `json:"objectCacheWeightMax"`
 }
 
 type GatherConfig struct {

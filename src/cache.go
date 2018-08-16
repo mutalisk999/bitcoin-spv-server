@@ -1,119 +1,93 @@
 package main
 
-import (
-	"github.com/mutalisk999/bitcoin-lib/src/bigint"
-	"strconv"
-)
+import "github.com/mutalisk999/bitcoin-lib/src/bigint"
 
-type BlockCache struct {
-	AddressTrxs []AddressTrxPair
-	TrxUtxos    []TrxUtxoPair
-	RawTrxs     []RawTrxPair
-	AddrChanged map[string]int
+type SlotCache struct {
+	AddrTrxsAdd map[string]map[string]int
+	UtxosAdd    map[string]UtxoDetail
+	UtxosDel    map[string]int
+	RawTrxsAdd  map[string][]byte
 }
 
-func (b *BlockCache) Initialize() {
-	b.AddressTrxs = make([]AddressTrxPair, 0, 50000)
-	b.TrxUtxos = make([]TrxUtxoPair, 0, 50000)
-	b.RawTrxs = make([]RawTrxPair, 0, 50000)
-	b.AddrChanged = make(map[string]int)
+func (s *SlotCache) Initialize() {
+	s.AddrTrxsAdd = make(map[string]map[string]int)
+	s.UtxosAdd = make(map[string]UtxoDetail)
+	s.UtxosDel = make(map[string]int)
+	s.RawTrxsAdd = make(map[string][]byte)
 }
 
-func (b *BlockCache) Clear() {
-	b.AddressTrxs = b.AddressTrxs[:0]
-	b.TrxUtxos = b.TrxUtxos[:0]
-	b.RawTrxs = b.RawTrxs[:0]
-	b.AddrChanged = make(map[string]int)
+func (s *SlotCache) Clear() {
+	s.AddrTrxsAdd = make(map[string]map[string]int)
+	s.UtxosAdd = make(map[string]UtxoDetail)
+	s.UtxosDel = make(map[string]int)
+	s.RawTrxsAdd = make(map[string][]byte)
 }
 
-func (b *BlockCache) AddAddressTrxPair(addressTrxPair AddressTrxPair) {
-	b.AddressTrxs = append(b.AddressTrxs, addressTrxPair)
+func (s *SlotCache) AddAddrTrx(addrStr string, trxId bigint.Uint256) {
+	trxIdsMapByAddr, ok := s.AddrTrxsAdd[addrStr]
+	if !ok {
+		trxIdsMapByAddr = make(map[string]int)
+	}
+	trxIdsMapByAddr[trxId.GetHex()] = 0
+	s.AddrTrxsAdd[addrStr] = trxIdsMapByAddr
 }
 
-func (b *BlockCache) AddTrxUtxoPair(trxUtxoPair TrxUtxoPair) {
-	b.TrxUtxos = append(b.TrxUtxos, trxUtxoPair)
-}
-
-func (b *BlockCache) AddRawTrxPair(rawTrxPair RawTrxPair) {
-	b.RawTrxs = append(b.RawTrxs, rawTrxPair)
-}
-
-func (b *BlockCache) AddAddrChanged(addrStr string) {
-	b.AddrChanged[addrStr] = 0
-}
-
-var blockCache *BlockCache
-
-type UtxoMemCache struct {
-	UtxoDetailMemMap map[string]UtxoDetail
-}
-
-func (u UtxoMemCache) Get(utxoSrc UtxoSource) (UtxoDetail, bool) {
-	memCacheKey := utxoSrc.TrxId.GetHex() + "," + strconv.Itoa(int(utxoSrc.Vout))
-	utxoDetail, ok := u.UtxoDetailMemMap[memCacheKey]
+func (s *SlotCache) GetUtxo(utxoSrc UtxoSource) (UtxoDetail, bool) {
+	utxoDetail, ok := s.UtxosAdd[utxoSrc.ToString()]
 	return utxoDetail, ok
 }
 
-func (u *UtxoMemCache) Add(utxoSrc UtxoSource, utxoDetail UtxoDetail) {
-	memCacheKey := utxoSrc.TrxId.GetHex() + "," + strconv.Itoa(int(utxoSrc.Vout))
-	u.UtxoDetailMemMap[memCacheKey] = utxoDetail
+func (s *SlotCache) AddUtxo(utxoSrc UtxoSource, utxoDetail UtxoDetail) {
+	s.UtxosAdd[utxoSrc.ToString()] = utxoDetail
 }
 
-func (u *UtxoMemCache) Remove(utxoSrc UtxoSource) {
-	memCacheKey := utxoSrc.TrxId.GetHex() + "," + strconv.Itoa(int(utxoSrc.Vout))
-	delete(u.UtxoDetailMemMap, memCacheKey)
-}
-
-var utxoMemCache *UtxoMemCache
-
-type AddressTrxsMemCache struct {
-	AddressTrxsMap map[string]map[string]int
-}
-
-func (a *AddressTrxsMemCache) Set(addrStr string, trxIds []bigint.Uint256) {
-	trxIdsMap := make(map[string]int)
-	for _, trxId := range trxIds {
-		trxIdsMap[trxId.GetHex()] = 0
-	}
-	a.AddressTrxsMap[addrStr] = trxIdsMap
-}
-
-func (a *AddressTrxsMemCache) Get(addrStr string) ([]bigint.Uint256, bool) {
-	var trxIds []bigint.Uint256
-	trxIdsMap, ok := a.AddressTrxsMap[addrStr]
-	for trxIdStr, _ := range trxIdsMap {
-		var trxId bigint.Uint256
-		trxId.SetHex(trxIdStr)
-		trxIds = append(trxIds, trxId)
-	}
-	return trxIds, ok
-}
-
-func (a *AddressTrxsMemCache) Add(addrStr string, trxId bigint.Uint256) error {
-	trxIdsMapByAddr, ok := a.AddressTrxsMap[addrStr]
-	if !ok {
-		trxIdsDB, err := addressTrxDBMgr.DBGet(addrStr)
-		if err != nil {
-			if err.Error() == LevelDBNotFound {
-				trxIdsMapByAddr = make(map[string]int)
-				trxIdsMapByAddr[trxId.GetHex()] = 0
-				a.AddressTrxsMap[addrStr] = trxIdsMapByAddr
-			} else {
-				return err
-			}
-		} else {
-			trxIdsMapByAddr = make(map[string]int)
-			for _, trxIdDB := range trxIdsDB {
-				trxIdsMapByAddr[trxIdDB.GetHex()] = 0
-			}
-			trxIdsMapByAddr[trxId.GetHex()] = 0
-			a.AddressTrxsMap[addrStr] = trxIdsMapByAddr
-		}
+func (s *SlotCache) DelUtxo(utxoSrc UtxoSource) {
+	utxoSrcStr := utxoSrc.ToString()
+	_, ok := s.UtxosAdd[utxoSrcStr]
+	if ok {
+		delete(s.UtxosAdd, utxoSrcStr)
 	} else {
-		trxIdsMapByAddr[trxId.GetHex()] = 0
-		a.AddressTrxsMap[addrStr] = trxIdsMapByAddr
+		s.UtxosDel[utxoSrcStr] = 0
 	}
-	return nil
 }
 
-var addressTrxsMemCache *AddressTrxsMemCache
+func (s *SlotCache) AddRawTrx(trxIdStr string, rawTrxData []byte) {
+	s.RawTrxsAdd[trxIdStr] = rawTrxData
+}
+
+func (s *SlotCache) CalcObjectCacheWeight() uint32 {
+	return uint32(len(s.AddrTrxsAdd)*20 + len(s.UtxosAdd) + len(s.UtxosDel) + len(s.RawTrxsAdd)*100)
+}
+
+type PendingCache struct {
+	AddrTrxs []AddrTrxsPair
+	Utxos    []UtxoPair
+	RawTrxs  []RawTrxPair
+}
+
+func (p *PendingCache) Initialize() {
+	p.AddrTrxs = make([]AddrTrxsPair, 0, 50000)
+	p.Utxos = make([]UtxoPair, 0, 50000)
+	p.RawTrxs = make([]RawTrxPair, 0, 50000)
+}
+
+func (p *PendingCache) Clear() {
+	p.AddrTrxs = p.AddrTrxs[:0]
+	p.Utxos = p.Utxos[:0]
+	p.RawTrxs = p.RawTrxs[:0]
+}
+
+func (p *PendingCache) AddAddrTrxsPair(addrTrxsPair AddrTrxsPair) {
+	p.AddrTrxs = append(p.AddrTrxs, addrTrxsPair)
+}
+
+func (p *PendingCache) AddUtxoPair(utxoPair UtxoPair) {
+	p.Utxos = append(p.Utxos, utxoPair)
+}
+
+func (p *PendingCache) AddRawTrxPair(rawTrxPair RawTrxPair) {
+	p.RawTrxs = append(p.RawTrxs, rawTrxPair)
+}
+
+var slotCache *SlotCache
+var pendingCache *PendingCache

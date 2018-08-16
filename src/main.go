@@ -13,8 +13,8 @@ import (
 
 var goroutineMgr *goroutine_mgr.GoroutineManager
 var globalConfigDBMgr *GlobalConfigDBMgr
-var addressTrxDBMgr *AddressTrxDBMgr
-var trxUtxoDBMgr *TrxUtxoDBMgr
+var addrTrxsDBMgr *AddrTrxsDBMgr
+var utxoDBMgr *UtxoDBMgr
 var rawTrxDBMgr *RawTrxDBMgr
 
 var quitFlag = false
@@ -29,17 +29,13 @@ func appInit() error {
 	// init quit channel
 	quitChan = make(chan byte)
 
-	// init block cache
-	blockCache = new(BlockCache)
-	blockCache.Initialize()
+	// init slot cache
+	slotCache = new(SlotCache)
+	slotCache.Initialize()
 
-	// init utxo memory cache
-	utxoMemCache = new(UtxoMemCache)
-	utxoMemCache.UtxoDetailMemMap = make(map[string]UtxoDetail)
-
-	// init address trxs memory cache
-	addressTrxsMemCache = new(AddressTrxsMemCache)
-	addressTrxsMemCache.AddressTrxsMap = make(map[string]map[string]int)
+	// init pending cache
+	pendingCache = new(PendingCache)
+	pendingCache.Initialize()
 
 	// init goroutine manager
 	goroutineMgr = new(goroutine_mgr.GoroutineManager)
@@ -53,15 +49,15 @@ func appInit() error {
 	}
 
 	// init address trx db manager
-	addressTrxDBMgr = new(AddressTrxDBMgr)
-	err = addressTrxDBMgr.DBOpen(config.DBConfig.DBDir + "/" + "address_trx_db")
+	addrTrxsDBMgr = new(AddrTrxsDBMgr)
+	err = addrTrxsDBMgr.DBOpen(config.DBConfig.DBDir + "/" + "address_trx_db")
 	if err != nil {
 		return err
 	}
 
 	// init trx utxo db manager
-	trxUtxoDBMgr = new(TrxUtxoDBMgr)
-	err = trxUtxoDBMgr.DBOpen(config.DBConfig.DBDir + "/" + "trx_utxo_db")
+	utxoDBMgr = new(UtxoDBMgr)
+	err = utxoDBMgr.DBOpen(config.DBConfig.DBDir + "/" + "trx_utxo_db")
 	if err != nil {
 		return err
 	}
@@ -83,24 +79,6 @@ func appInit() error {
 		if !ok {
 			return err
 		}
-	}
-
-	// get current block height
-	blockHeight, err := getStartBlockHeight()
-	if err != nil {
-		return err
-	}
-
-	// init utxo memory cache
-	err = trxUtxoDBMgr.InitUtxoMemCache(blockHeight)
-	if err != nil {
-		return err
-	}
-
-	// init address trxs memory cache
-	err = addressTrxDBMgr.InitAddressTrxsMemCache()
-	if err != nil {
-		return err
 	}
 
 	return nil
@@ -150,8 +128,6 @@ func appCmd() error {
 			break
 		} else if strLine == "getblockcount" {
 			fmt.Println(startBlockHeight)
-		} else if strLine == "getutxocount" {
-			fmt.Println(len(utxoMemCache.UtxoDetailMemMap))
 		} else if strLine == "goroutinestatus" {
 			goroutineMgr.GoroutineDump()
 		} else {
@@ -162,8 +138,8 @@ func appCmd() error {
 
 	// sync and close
 	globalConfigDBMgr.DBClose()
-	addressTrxDBMgr.DBClose()
-	trxUtxoDBMgr.DBClose()
+	addrTrxsDBMgr.DBClose()
+	utxoDBMgr.DBClose()
 	rawTrxDBMgr.DBClose()
 
 	return nil

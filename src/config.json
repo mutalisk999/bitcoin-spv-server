@@ -3,7 +3,7 @@
     "dbDir":"db"
   },
   "cacheConfig":{
-    "blockCacheCount":10
+    "objectCacheWeightMax": 30000000
   },
   "gatherConfig":{
     "storeRawTrx": false

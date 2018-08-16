@@ -7,6 +7,7 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/gorilla/rpc"
 	"github.com/gorilla/rpc/json"
+	"github.com/mutalisk999/bitcoin-lib/src/bigint"
 	"github.com/mutalisk999/bitcoin-lib/src/transaction"
 	"github.com/mutalisk999/go-lib/src/sched/goroutine_mgr"
 	"io"
@@ -21,13 +22,8 @@ func (s *Service) GetBlockCount(r *http.Request, args *interface{}, reply *uint3
 	return nil
 }
 
-func (s *Service) GetUtxoCount(r *http.Request, args *interface{}, reply *uint32) error {
-	*reply = uint32(len(utxoMemCache.UtxoDetailMemMap))
-	return nil
-}
-
 func (s *Service) GetAddressTrxs(r *http.Request, args *string, reply *[]string) error {
-	trxIds, err := addressTrxDBMgr.DBGet(*args)
+	trxIds, err := addrTrxsDBMgr.DBGet(*args)
 	if err != nil {
 		return errors.New("address not found")
 	}
@@ -38,7 +34,12 @@ func (s *Service) GetAddressTrxs(r *http.Request, args *string, reply *[]string)
 }
 
 func (s *Service) GetRawTrx(r *http.Request, args *string, reply *string) error {
-	bytesRawTrx, err := rawTrxDBMgr.DBGet(*args)
+	var trxId bigint.Uint256
+	err := trxId.SetHex(*args)
+	if err != nil {
+		return err
+	}
+	bytesRawTrx, err := rawTrxDBMgr.DBGet(trxId)
 	if err != nil {
 		return errors.New("transaction id not found")
 	}
@@ -47,7 +48,12 @@ func (s *Service) GetRawTrx(r *http.Request, args *string, reply *string) error 
 }
 
 func (s *Service) GetTrx(r *http.Request, args *string, reply *transaction.TrxPrintAble) error {
-	bytesRawTrx, err := rawTrxDBMgr.DBGet(*args)
+	var trxId bigint.Uint256
+	err := trxId.SetHex(*args)
+	if err != nil {
+		return err
+	}
+	bytesRawTrx, err := rawTrxDBMgr.DBGet(trxId)
 	if err != nil {
 		return errors.New("transaction id not found")
 	}
@@ -65,7 +71,7 @@ func (s *Service) GetTrx(r *http.Request, args *string, reply *transaction.TrxPr
 
 func (s *Service) GetUtxo(r *http.Request, args *UtxoSourcePrintAble, reply *UtxoDetailPrintAble) error {
 	utxoSource := args.GetUtxoSource()
-	utxoDetail, err := trxUtxoDBMgr.DBGet(utxoSource)
+	utxoDetail, err := utxoDBMgr.DBGet(utxoSource)
 	if err != nil {
 		return errors.New("utxo source not found")
 	}
@@ -75,12 +81,12 @@ func (s *Service) GetUtxo(r *http.Request, args *UtxoSourcePrintAble, reply *Utx
 }
 
 func (s *Service) ListUnSpent(r *http.Request, args *string, reply *[]UtxoDetailPrintAble) error {
-	trxIds, err := addressTrxDBMgr.DBGet(*args)
+	trxIds, err := addrTrxsDBMgr.DBGet(*args)
 	if err != nil {
 		return errors.New("address not found")
 	}
 	for _, trxId := range trxIds {
-		bytesRawTrx, err := rawTrxDBMgr.DBGet(trxId.GetHex())
+		bytesRawTrx, err := rawTrxDBMgr.DBGet(trxId)
 		if err != nil {
 			return errors.New("transaction id not found")
 		}
@@ -95,7 +101,7 @@ func (s *Service) ListUnSpent(r *http.Request, args *string, reply *[]UtxoDetail
 			var utxoSource UtxoSource
 			utxoSource.TrxId = trxId
 			utxoSource.Vout = uint32(i)
-			utxoDetail, err := trxUtxoDBMgr.DBGet(utxoSource)
+			utxoDetail, err := utxoDBMgr.DBGet(utxoSource)
 			if err != nil {
 				return errors.New("utxo source not found")
 			}

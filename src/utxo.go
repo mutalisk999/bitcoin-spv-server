@@ -2,16 +2,40 @@ package main
 
 import (
 	"encoding/hex"
+	"errors"
 	"github.com/mutalisk999/bitcoin-lib/src/bigint"
 	"github.com/mutalisk999/bitcoin-lib/src/blob"
 	"github.com/mutalisk999/bitcoin-lib/src/script"
 	"github.com/mutalisk999/bitcoin-lib/src/serialize"
 	"io"
+	"strconv"
+	"strings"
 )
 
 type UtxoSource struct {
 	TrxId bigint.Uint256
 	Vout  uint32
+}
+
+func (u UtxoSource) ToString() string {
+	return u.TrxId.GetHex() + "," + strconv.Itoa(int(u.Vout))
+}
+
+func (u *UtxoSource) FromString(utxoStr string) error {
+	strSplits := strings.Split(utxoStr, ",")
+	if len(strSplits) != 2 {
+		return errors.New("invalid utxoStr")
+	}
+	err := u.TrxId.SetHex(strSplits[0])
+	if err != nil {
+		return err
+	}
+	index, err := strconv.Atoi(strSplits[1])
+	if err != nil {
+		return err
+	}
+	u.Vout = uint32(index)
+	return nil
 }
 
 func (u UtxoSource) Pack(writer io.Writer) error {
