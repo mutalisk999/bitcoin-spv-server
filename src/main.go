@@ -33,10 +33,6 @@ func appInit() error {
 	slotCache = new(SlotCache)
 	slotCache.Initialize()
 
-	// init pending cache
-	pendingCache = new(PendingCache)
-	pendingCache.Initialize()
-
 	// init goroutine manager
 	goroutineMgr = new(goroutine_mgr.GoroutineManager)
 	goroutineMgr.Initialise("MainGoroutineManager")
@@ -128,6 +124,8 @@ func appCmd() error {
 			break
 		} else if strLine == "getblockcount" {
 			fmt.Println(startBlockHeight)
+		} else if strLine == "getslotweight" {
+			fmt.Println(slotCache.CalcObjectCacheWeight())
 		} else if strLine == "goroutinestatus" {
 			goroutineMgr.GoroutineDump()
 		} else {
@@ -151,6 +149,14 @@ func main() {
 	go func() {
 		http.ListenAndServe("0.0.0.0:8080", nil)
 	}()
+
+	//agent := stackimpact.Start(stackimpact.Options{
+	//	AgentKey: "0f6538f8e7589efb205d8dc44a4b9ba1ecfd0b11",
+	//	AppName:  "MyGoApp",
+	//})
+	//agent.StartCPUProfiler()
+	//agent.StartBlockProfiler()
+	//agent.ReportAllocationProfile()
 
 	// init config
 	jsonParser := new(JsonStruct)

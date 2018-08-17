@@ -1,12 +1,16 @@
 package main
 
-import "github.com/mutalisk999/bitcoin-lib/src/bigint"
+import (
+	"github.com/mutalisk999/bitcoin-lib/src/bigint"
+	"sync"
+)
 
 type SlotCache struct {
 	AddrTrxsAdd map[string]map[string]int
 	UtxosAdd    map[string]UtxoDetail
 	UtxosDel    map[string]int
 	RawTrxsAdd  map[string][]byte
+	Mutex       *sync.Mutex
 }
 
 func (s *SlotCache) Initialize() {
@@ -14,6 +18,7 @@ func (s *SlotCache) Initialize() {
 	s.UtxosAdd = make(map[string]UtxoDetail)
 	s.UtxosDel = make(map[string]int)
 	s.RawTrxsAdd = make(map[string][]byte)
+	s.Mutex = new(sync.Mutex)
 }
 
 func (s *SlotCache) Clear() {
@@ -21,27 +26,35 @@ func (s *SlotCache) Clear() {
 	s.UtxosAdd = make(map[string]UtxoDetail)
 	s.UtxosDel = make(map[string]int)
 	s.RawTrxsAdd = make(map[string][]byte)
+	s.Mutex = new(sync.Mutex)
 }
 
 func (s *SlotCache) AddAddrTrx(addrStr string, trxId bigint.Uint256) {
+	s.Mutex.Lock()
 	trxIdsMapByAddr, ok := s.AddrTrxsAdd[addrStr]
 	if !ok {
 		trxIdsMapByAddr = make(map[string]int)
 	}
 	trxIdsMapByAddr[trxId.GetHex()] = 0
 	s.AddrTrxsAdd[addrStr] = trxIdsMapByAddr
+	s.Mutex.Unlock()
 }
 
 func (s *SlotCache) GetUtxo(utxoSrc UtxoSource) (UtxoDetail, bool) {
+	s.Mutex.Lock()
 	utxoDetail, ok := s.UtxosAdd[utxoSrc.ToString()]
+	s.Mutex.Unlock()
 	return utxoDetail, ok
 }
 
 func (s *SlotCache) AddUtxo(utxoSrc UtxoSource, utxoDetail UtxoDetail) {
+	s.Mutex.Lock()
 	s.UtxosAdd[utxoSrc.ToString()] = utxoDetail
+	s.Mutex.Unlock()
 }
 
 func (s *SlotCache) DelUtxo(utxoSrc UtxoSource) {
+	s.Mutex.Lock()
 	utxoSrcStr := utxoSrc.ToString()
 	_, ok := s.UtxosAdd[utxoSrcStr]
 	if ok {
@@ -49,45 +62,32 @@ func (s *SlotCache) DelUtxo(utxoSrc UtxoSource) {
 	} else {
 		s.UtxosDel[utxoSrcStr] = 0
 	}
+	s.Mutex.Unlock()
 }
 
 func (s *SlotCache) AddRawTrx(trxIdStr string, rawTrxData []byte) {
+	s.Mutex.Lock()
 	s.RawTrxsAdd[trxIdStr] = rawTrxData
+	s.Mutex.Unlock()
 }
 
-func (s *SlotCache) CalcObjectCacheWeight() uint32 {
-	return uint32(len(s.AddrTrxsAdd)*20 + len(s.UtxosAdd) + len(s.UtxosDel) + len(s.RawTrxsAdd)*100)
-}
+func (s *SlotCache) CalcObjectCacheWeight() int64 {
+	var addrTrxsWeight int64 = 0
+	var utxosWeight int64 = 0
+	var rawTrxsWeight int64 = 0
+	var totalWeight int64 = 0
 
-type PendingCache struct {
-	AddrTrxs []AddrTrxsPair
-	Utxos    []UtxoPair
-	RawTrxs  []RawTrxPair
-}
-
-func (p *PendingCache) Initialize() {
-	p.AddrTrxs = make([]AddrTrxsPair, 0, 50000)
-	p.Utxos = make([]UtxoPair, 0, 50000)
-	p.RawTrxs = make([]RawTrxPair, 0, 50000)
-}
-
-func (p *PendingCache) Clear() {
-	p.AddrTrxs = p.AddrTrxs[:0]
-	p.Utxos = p.Utxos[:0]
-	p.RawTrxs = p.RawTrxs[:0]
-}
-
-func (p *PendingCache) AddAddrTrxsPair(addrTrxsPair AddrTrxsPair) {
-	p.AddrTrxs = append(p.AddrTrxs, addrTrxsPair)
-}
-
-func (p *PendingCache) AddUtxoPair(utxoPair UtxoPair) {
-	p.Utxos = append(p.Utxos, utxoPair)
-}
-
-func (p *PendingCache) AddRawTrxPair(rawTrxPair RawTrxPair) {
-	p.RawTrxs = append(p.RawTrxs, rawTrxPair)
+	s.Mutex.Lock()
+	for _, v := range s.AddrTrxsAdd {
+		addrTrxsWeight = addrTrxsWeight + int64(30) + int64(32)*int64(len(v))
+	}
+	utxosWeight = int64(108)*int64(len(s.UtxosAdd)) + int64(36)*int64(len(s.UtxosDel))
+	for _, v := range s.RawTrxsAdd {
+		rawTrxsWeight = rawTrxsWeight + int64(64) + int64(len(v))
+	}
+	totalWeight = addrTrxsWeight + utxosWeight + rawTrxsWeight
+	s.Mutex.Unlock()
+	return totalWeight
 }
 
 var slotCache *SlotCache
-var pendingCache *PendingCache

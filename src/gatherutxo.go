@@ -12,6 +12,7 @@ import (
 	"github.com/mutalisk999/go-lib/src/sched/goroutine_mgr"
 	"github.com/ybbus/jsonrpc"
 	"io"
+	"runtime/debug"
 	"strconv"
 	"strings"
 	"time"
@@ -155,7 +156,7 @@ func storeChainIndexState(state string) error {
 	return nil
 }
 
-func applyToPendingCache(slotCache *SlotCache, pendingCache *PendingCache) error {
+func applySlotCacheToDB(slotCache *SlotCache) error {
 	// deal addr trxs pair
 	for addrStr, trxIdsMap := range slotCache.AddrTrxsAdd {
 		trxIdsDB, err := addrTrxsDBMgr.DBGet(addrStr)
@@ -174,70 +175,68 @@ func applyToPendingCache(slotCache *SlotCache, pendingCache *PendingCache) error
 			}
 			trxIdsNew = append(trxIdsNew, trxId)
 		}
-		var addrTrxsPair AddrTrxsPair
-		addrTrxsPair.AddrTrxsKey = addrStr
-		addrTrxsPair.AddrTrxsValue = trxIdsNew
-		addrTrxsPair.AddrTrxsOp = 0
-		pendingCache.AddAddrTrxsPair(addrTrxsPair)
+		err = addrTrxsDBMgr.DBPut(addrStr, trxIdsNew)
+		if err != nil {
+			return err
+		}
 	}
 
 	// deal utxo pair
 	for utxoSrcStr, utxoDetail := range slotCache.UtxosAdd {
-		var utxoPair UtxoPair
 		var utxoSrc UtxoSource
 		err := utxoSrc.FromString(utxoSrcStr)
 		if err != nil {
 			return err
 		}
-		utxoPair.UtxoKey = utxoSrc
-		utxoPair.UtxoValue = utxoDetail
-		utxoPair.UtxoOp = 0
-		pendingCache.AddUtxoPair(utxoPair)
+		err = utxoDBMgr.DBPut(utxoSrc, utxoDetail)
+		if err != nil {
+			return err
+		}
 	}
 	for utxoSrcStr, _ := range slotCache.UtxosDel {
-		var utxoPair UtxoPair
+
 		var utxoSrc UtxoSource
 		err := utxoSrc.FromString(utxoSrcStr)
 		if err != nil {
 			return err
 		}
-		utxoPair.UtxoKey = utxoSrc
-		utxoPair.UtxoOp = 1
-		pendingCache.AddUtxoPair(utxoPair)
+		err = utxoDBMgr.DBDelete(utxoSrc)
+		if err != nil {
+			return err
+		}
 	}
 
 	// deal raw trx pair
 	for trxIdStr, rawTrxData := range slotCache.RawTrxsAdd {
-		var rawTrxPair RawTrxPair
 		var trxId bigint.Uint256
 		err := trxId.SetHex(trxIdStr)
 		if err != nil {
 			return err
 		}
-		rawTrxPair.TrxIdKey = trxId
-		rawTrxPair.RawTrxDataValue = rawTrxData
-		rawTrxPair.RawTrxOp = 0
-		pendingCache.AddRawTrxPair(rawTrxPair)
+		err = rawTrxDBMgr.DBPut(trxId, rawTrxData)
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil
 }
 
-func storePendingCache(pendingCache *PendingCache) error {
-	err := addrTrxsDBMgr.DBBatch(pendingCache.AddrTrxs)
-	if err != nil {
-		return err
-	}
-	err = utxoDBMgr.DBBatch(pendingCache.Utxos)
-	if err != nil {
-		return err
-	}
-	err = rawTrxDBMgr.DBBatch(pendingCache.RawTrxs)
-	if err != nil {
-		return err
-	}
-	return nil
-}
+//func storePendingCache(pendingCache *PendingCache) error {
+//	err := addrTrxsDBMgr.DBBatch(pendingCache.AddrTrxs)
+//	if err != nil {
+//		return err
+//	}
+//	err = utxoDBMgr.DBBatch(pendingCache.Utxos)
+//	if err != nil {
+//		return err
+//	}
+//	err = rawTrxDBMgr.DBBatch(pendingCache.RawTrxs)
+//	if err != nil {
+//		return err
+//	}
+//	return nil
+//}
 
 func storeStartBlockHeight(blockHeight uint32) error {
 	err := globalConfigDBMgr.DBPut("blockHeight", strconv.Itoa(int(blockHeight)))
@@ -432,15 +431,10 @@ func doGatherUtxoType1(goroutine goroutine_mgr.Goroutine, args ...interface{}) {
 					quitFlag = true
 					break
 				}
-				if (slotCache.CalcObjectCacheWeight() > config.CacheConfig.ObjectCacheWeightMax) || (startBlockHeight > blockCount-20) {
+				if (startBlockHeight > blockCount-20) || ((startBlockHeight%config.CacheConfig.SamplingBlockCount == 0) && (slotCache.CalcObjectCacheWeight() > config.CacheConfig.ObjectCacheWeightMax)) {
 					fmt.Println("startBlockHeight:", startBlockHeight)
 					fmt.Println("Weight", slotCache.CalcObjectCacheWeight())
-					err = applyToPendingCache(slotCache, pendingCache)
-					if err != nil {
-						quitFlag = true
-						break
-					}
-					err = storePendingCache(pendingCache)
+					err = applySlotCacheToDB(slotCache)
 					if err != nil {
 						quitFlag = true
 						break
@@ -456,17 +450,12 @@ func doGatherUtxoType1(goroutine goroutine_mgr.Goroutine, args ...interface{}) {
 						break
 					}
 					slotCache.Clear()
-					pendingCache.Clear()
+					debug.FreeOSMemory()
 				}
 				startBlockHeight += 1
 			}
 			// need to flush slot cache
-			err = applyToPendingCache(slotCache, pendingCache)
-			if err != nil {
-				quitFlag = true
-				break
-			}
-			err = storePendingCache(pendingCache)
+			err = applySlotCacheToDB(slotCache)
 			if err != nil {
 				quitFlag = true
 				break
@@ -482,7 +471,6 @@ func doGatherUtxoType1(goroutine goroutine_mgr.Goroutine, args ...interface{}) {
 				break
 			}
 			slotCache.Clear()
-			pendingCache.Clear()
 
 			// if break from the inside loop for, break from the outside loop for
 			if quitFlag == true {
@@ -545,15 +533,10 @@ func doGatherUtxoType2(goroutine goroutine_mgr.Goroutine, args ...interface{}) {
 					quitFlag = true
 					break
 				}
-				if (slotCache.CalcObjectCacheWeight() > config.CacheConfig.ObjectCacheWeightMax) || (startBlockHeight > blockCount-20) {
+				if (startBlockHeight > blockCount-20) || ((startBlockHeight%config.CacheConfig.SamplingBlockCount == 0) && (slotCache.CalcObjectCacheWeight() > config.CacheConfig.ObjectCacheWeightMax)) {
 					fmt.Println("startBlockHeight:", startBlockHeight)
 					fmt.Println("Weight", slotCache.CalcObjectCacheWeight())
-					err = applyToPendingCache(slotCache, pendingCache)
-					if err != nil {
-						quitFlag = true
-						break
-					}
-					err = storePendingCache(pendingCache)
+					err = applySlotCacheToDB(slotCache)
 					if err != nil {
 						quitFlag = true
 						break
@@ -569,17 +552,12 @@ func doGatherUtxoType2(goroutine goroutine_mgr.Goroutine, args ...interface{}) {
 						break
 					}
 					slotCache.Clear()
-					pendingCache.Clear()
+					debug.FreeOSMemory()
 				}
 				startBlockHeight += 1
 			}
 			// need to flush slot cache
-			err = applyToPendingCache(slotCache, pendingCache)
-			if err != nil {
-				quitFlag = true
-				break
-			}
-			err = storePendingCache(pendingCache)
+			err = applySlotCacheToDB(slotCache)
 			if err != nil {
 				quitFlag = true
 				break
@@ -595,7 +573,6 @@ func doGatherUtxoType2(goroutine goroutine_mgr.Goroutine, args ...interface{}) {
 				break
 			}
 			slotCache.Clear()
-			pendingCache.Clear()
 
 			// if break from the inside loop for, break from the outside loop for
 			if quitFlag == true {

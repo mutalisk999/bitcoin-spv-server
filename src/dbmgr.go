@@ -147,14 +147,14 @@ func trxIdsFromBytes(bytesTrxIds []byte) ([]bigint.Uint256, error) {
 	bufReader := io.Reader(bytes.NewBuffer(bytesTrxIds))
 	ui64, err := serialize.UnPackCompactSize(bufReader)
 	if err != nil {
-		return nil, err
+		return []bigint.Uint256{}, err
 	}
 	trxIds := make([]bigint.Uint256, ui64, ui64)
 	for i := 0; i < int(ui64); i++ {
 		var trxId bigint.Uint256
 		err = trxId.UnPack(bufReader)
 		if err != nil {
-			return nil, err
+			return []bigint.Uint256{}, err
 		}
 		trxIds[i] = trxId
 	}
