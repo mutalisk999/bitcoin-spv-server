@@ -35,27 +35,39 @@ func (s *SlotCache) AddAddrTrx(addrStr string, trxId bigint.Uint256) {
 	if !ok {
 		trxIdsMapByAddr = make(map[string]int)
 	}
-	trxIdsMapByAddr[trxId.GetHex()] = 0
+	trxIdsMapByAddr[string(trxId.GetData())] = 0
 	s.AddrTrxsAdd[addrStr] = trxIdsMapByAddr
 	s.Mutex.Unlock()
 }
 
 func (s *SlotCache) GetUtxo(utxoSrc UtxoSource) (UtxoDetail, bool) {
+	utxoSrcStr, err := utxoSrc.ToStreamString()
+	if err != nil {
+		return UtxoDetail{}, false
+	}
 	s.Mutex.Lock()
-	utxoDetail, ok := s.UtxosAdd[utxoSrc.ToString()]
+	utxoDetail, ok := s.UtxosAdd[utxoSrcStr]
 	s.Mutex.Unlock()
 	return utxoDetail, ok
 }
 
-func (s *SlotCache) AddUtxo(utxoSrc UtxoSource, utxoDetail UtxoDetail) {
+func (s *SlotCache) AddUtxo(utxoSrc UtxoSource, utxoDetail UtxoDetail) error {
+	utxoSrcStr, err := utxoSrc.ToStreamString()
+	if err != nil {
+		return err
+	}
 	s.Mutex.Lock()
-	s.UtxosAdd[utxoSrc.ToString()] = utxoDetail
+	s.UtxosAdd[utxoSrcStr] = utxoDetail
 	s.Mutex.Unlock()
+	return nil
 }
 
-func (s *SlotCache) DelUtxo(utxoSrc UtxoSource) {
+func (s *SlotCache) DelUtxo(utxoSrc UtxoSource) error {
+	utxoSrcStr, err := utxoSrc.ToStreamString()
+	if err != nil {
+		return err
+	}
 	s.Mutex.Lock()
-	utxoSrcStr := utxoSrc.ToString()
 	_, ok := s.UtxosAdd[utxoSrcStr]
 	if ok {
 		delete(s.UtxosAdd, utxoSrcStr)
@@ -63,6 +75,7 @@ func (s *SlotCache) DelUtxo(utxoSrc UtxoSource) {
 		s.UtxosDel[utxoSrcStr] = 0
 	}
 	s.Mutex.Unlock()
+	return nil
 }
 
 func (s *SlotCache) AddRawTrx(trxIdStr string, rawTrxData []byte) {
@@ -83,7 +96,7 @@ func (s *SlotCache) CalcObjectCacheWeight() int64 {
 	}
 	utxosWeight = int64(108)*int64(len(s.UtxosAdd)) + int64(36)*int64(len(s.UtxosDel))
 	for _, v := range s.RawTrxsAdd {
-		rawTrxsWeight = rawTrxsWeight + int64(64) + int64(len(v))
+		rawTrxsWeight = rawTrxsWeight + int64(32) + int64(len(v))
 	}
 	totalWeight = addrTrxsWeight + utxosWeight + rawTrxsWeight
 	s.Mutex.Unlock()

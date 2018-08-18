@@ -164,12 +164,12 @@ func applySlotCacheToDB(slotCache *SlotCache) error {
 			trxIdsDB = []bigint.Uint256{}
 		}
 		for _, trxId := range trxIdsDB {
-			trxIdsMap[trxId.GetHex()] = 0
+			trxIdsMap[string(trxId.GetData())] = 0
 		}
 		trxIdsNew := make([]bigint.Uint256, 0, len(trxIdsMap))
 		for trxIdStr, _ := range trxIdsMap {
 			var trxId bigint.Uint256
-			err = trxId.SetHex(trxIdStr)
+			err = trxId.SetData([]byte(trxIdStr))
 			if err != nil {
 				return err
 			}
@@ -184,7 +184,7 @@ func applySlotCacheToDB(slotCache *SlotCache) error {
 	// deal utxo pair
 	for utxoSrcStr, utxoDetail := range slotCache.UtxosAdd {
 		var utxoSrc UtxoSource
-		err := utxoSrc.FromString(utxoSrcStr)
+		err := utxoSrc.FromStreamString(utxoSrcStr)
 		if err != nil {
 			return err
 		}
@@ -196,7 +196,7 @@ func applySlotCacheToDB(slotCache *SlotCache) error {
 	for utxoSrcStr, _ := range slotCache.UtxosDel {
 
 		var utxoSrc UtxoSource
-		err := utxoSrc.FromString(utxoSrcStr)
+		err := utxoSrc.FromStreamString(utxoSrcStr)
 		if err != nil {
 			return err
 		}
@@ -209,7 +209,7 @@ func applySlotCacheToDB(slotCache *SlotCache) error {
 	// deal raw trx pair
 	for trxIdStr, rawTrxData := range slotCache.RawTrxsAdd {
 		var trxId bigint.Uint256
-		err := trxId.SetHex(trxIdStr)
+		err := trxId.SetData([]byte(trxIdStr))
 		if err != nil {
 			return err
 		}
@@ -221,22 +221,6 @@ func applySlotCacheToDB(slotCache *SlotCache) error {
 
 	return nil
 }
-
-//func storePendingCache(pendingCache *PendingCache) error {
-//	err := addrTrxsDBMgr.DBBatch(pendingCache.AddrTrxs)
-//	if err != nil {
-//		return err
-//	}
-//	err = utxoDBMgr.DBBatch(pendingCache.Utxos)
-//	if err != nil {
-//		return err
-//	}
-//	err = rawTrxDBMgr.DBBatch(pendingCache.RawTrxs)
-//	if err != nil {
-//		return err
-//	}
-//	return nil
-//}
 
 func storeStartBlockHeight(blockHeight uint32) error {
 	err := globalConfigDBMgr.DBPut("blockHeight", strconv.Itoa(int(blockHeight)))
@@ -260,7 +244,10 @@ func dealWithVinToCache(vin transaction.TxIn, trxId bigint.Uint256) error {
 			return errors.New("can not find prevout trxid: " + vin.PrevOut.Hash.GetHex() + ", vout: " + strconv.Itoa(int(vin.PrevOut.N)))
 		}
 	}
-	slotCache.DelUtxo(utxoSource)
+	err := slotCache.DelUtxo(utxoSource)
+	if err != nil {
+		return err
+	}
 
 	scriptPubKey := utxoDetail.ScriptPubKey
 	// deal address trx pair
@@ -309,7 +296,10 @@ func dealWithVoutToCache(blockHeight uint32, vout transaction.TxOut, trxId bigin
 	utxoDetail.Address = addrStr
 	utxoDetail.ScriptPubKey = scriptPubKey
 
-	slotCache.AddUtxo(utxoSource, utxoDetail)
+	err := slotCache.AddUtxo(utxoSource, utxoDetail)
+	if err != nil {
+		return err
+	}
 
 	return nil
 }
@@ -323,7 +313,7 @@ func dealWithRawTrxToCache(trxId bigint.Uint256, trx *transaction.Transaction) e
 	}
 	rawTrxDate := bytesBuf.Bytes()
 
-	slotCache.AddRawTrx(trxId.GetHex(), rawTrxDate)
+	slotCache.AddRawTrx(string(trxId.GetData()), rawTrxDate)
 
 	return nil
 }

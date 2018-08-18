@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/mutalisk999/go-lib/src/sched/goroutine_mgr"
+	"github.com/stackimpact/stackimpact-go"
 	"net/http"
 	_ "net/http/pprof"
 	"os"
@@ -150,13 +151,13 @@ func main() {
 		http.ListenAndServe("0.0.0.0:8080", nil)
 	}()
 
-	//agent := stackimpact.Start(stackimpact.Options{
-	//	AgentKey: "0f6538f8e7589efb205d8dc44a4b9ba1ecfd0b11",
-	//	AppName:  "MyGoApp",
-	//})
-	//agent.StartCPUProfiler()
-	//agent.StartBlockProfiler()
-	//agent.ReportAllocationProfile()
+	agent := stackimpact.Start(stackimpact.Options{
+		AgentKey: "0f6538f8e7589efb205d8dc44a4b9ba1ecfd0b11",
+		AppName:  "MyGoApp",
+	})
+	agent.StartCPUProfiler()
+	agent.StartBlockProfiler()
+	agent.ReportAllocationProfile()
 
 	// init config
 	jsonParser := new(JsonStruct)

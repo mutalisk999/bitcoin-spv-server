@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/hex"
 	"errors"
 	"github.com/mutalisk999/bitcoin-lib/src/bigint"
@@ -8,8 +9,6 @@ import (
 	"github.com/mutalisk999/bitcoin-lib/src/script"
 	"github.com/mutalisk999/bitcoin-lib/src/serialize"
 	"io"
-	"strconv"
-	"strings"
 )
 
 type UtxoSource struct {
@@ -17,24 +16,32 @@ type UtxoSource struct {
 	Vout  uint32
 }
 
-func (u UtxoSource) ToString() string {
-	return u.TrxId.GetHex() + "," + strconv.Itoa(int(u.Vout))
+func (u UtxoSource) ToStreamString() (string, error) {
+	bytesBuf := bytes.NewBuffer([]byte{})
+	bufWriter := io.Writer(bytesBuf)
+	err := serialize.PackUint32(bufWriter, u.Vout)
+	if err != nil {
+		return "", err
+	}
+	streamStr := string(u.TrxId.GetData()) + string(bytesBuf.Bytes())
+	if len(streamStr) != 36 {
+		return "", errors.New("invalid stream string with wrong length")
+	}
+	return streamStr, nil
 }
 
-func (u *UtxoSource) FromString(utxoStr string) error {
-	strSplits := strings.Split(utxoStr, ",")
-	if len(strSplits) != 2 {
-		return errors.New("invalid utxoStr")
+func (u *UtxoSource) FromStreamString(streamStr string) error {
+	if len(streamStr) != 36 {
+		return errors.New("invalid stream string with wrong length")
 	}
-	err := u.TrxId.SetHex(strSplits[0])
+	var err error
+	u.TrxId.SetData([]byte(streamStr[0:32]))
+	bytesBuf := bytes.NewBuffer([]byte(streamStr[32:36]))
+	bufReader := io.Reader(bytesBuf)
+	u.Vout, err = serialize.UnPackUint32(bufReader)
 	if err != nil {
 		return err
 	}
-	index, err := strconv.Atoi(strSplits[1])
-	if err != nil {
-		return err
-	}
-	u.Vout = uint32(index)
 	return nil
 }
 
