@@ -9,6 +9,7 @@ import (
 	"net/http"
 	_ "net/http/pprof"
 	"os"
+	"runtime"
 	"strings"
 )
 
@@ -67,14 +68,14 @@ func appInit() error {
 	}
 
 	// get chain index state
-	ok, err := getChainIndexState()
+	state, err := getChainIndexState()
 	if err != nil {
 		if err.Error() != LevelDBNotFound {
 			return err
 		}
 	} else {
-		if !ok {
-			return err
+		if state != "1" {
+			return errors.New("incorrect chain index state")
 		}
 	}
 
@@ -84,6 +85,7 @@ func appInit() error {
 func appRun() error {
 	startSignalHandler()
 	startRpcServer()
+	startMemMaintainer()
 
 	if config.RpcClientConfig.DataSource == "btcWallet" {
 		// collect from the wallet node
@@ -129,6 +131,11 @@ func appCmd() error {
 			fmt.Println(slotCache.CalcObjectCacheWeight())
 		} else if strLine == "goroutinestatus" {
 			goroutineMgr.GoroutineDump()
+		} else if strLine == "heapinfo" {
+			var mStat runtime.MemStats
+			runtime.ReadMemStats(&mStat)
+			fmt.Println("HeapAlloc:", mStat.HeapAlloc)
+			fmt.Println("HeapIdle:", mStat.HeapIdle)
 		} else {
 			fmt.Println("not support command: ", strLine)
 		}

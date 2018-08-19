@@ -12,7 +12,6 @@ import (
 	"github.com/mutalisk999/go-lib/src/sched/goroutine_mgr"
 	"github.com/ybbus/jsonrpc"
 	"io"
-	"runtime/debug"
 	"strconv"
 	"strings"
 	"time"
@@ -135,17 +134,15 @@ func getStartBlockHeight() (uint32, error) {
 	return startBlockHeight, nil
 }
 
-func getChainIndexState() (bool, error) {
+func getChainIndexState() (string, error) {
 	state, err := globalConfigDBMgr.DBGet("chainIndexState")
 	if err != nil {
-		return false, err
+		return "", err
 	}
-	if state == "0" {
-		return false, errors.New("chain index state is cached")
-	} else if state == "1" {
-		return true, nil
+	if state == "0" || state == "1" {
+		return state, nil
 	}
-	return false, errors.New("chain index state is cached")
+	return "", errors.New("invalid chain index state")
 }
 
 func storeChainIndexState(state string) error {
@@ -159,15 +156,20 @@ func storeChainIndexState(state string) error {
 func applySlotCacheToDB(slotCache *SlotCache) error {
 	// deal addr trxs pair
 	for addrStr, trxIdsMap := range slotCache.AddrTrxsAdd {
+		// deep copy trxIdsMap, in order to avoid influence for AddrTrxsAdd
+		trxIdsMapDump := make(map[string]int)
+		for k, v := range trxIdsMap {
+			trxIdsMapDump[k] = v
+		}
 		trxIdsDB, err := addrTrxsDBMgr.DBGet(addrStr)
 		if err != nil && err.Error() == LevelDBNotFound {
 			trxIdsDB = []bigint.Uint256{}
 		}
 		for _, trxId := range trxIdsDB {
-			trxIdsMap[string(trxId.GetData())] = 0
+			trxIdsMapDump[string(trxId.GetData())] = 0
 		}
-		trxIdsNew := make([]bigint.Uint256, 0, len(trxIdsMap))
-		for trxIdStr, _ := range trxIdsMap {
+		trxIdsNew := make([]bigint.Uint256, 0, len(trxIdsMapDump))
+		for trxIdStr, _ := range trxIdsMapDump {
 			var trxId bigint.Uint256
 			err = trxId.SetData([]byte(trxIdStr))
 			if err != nil {
@@ -194,7 +196,6 @@ func applySlotCacheToDB(slotCache *SlotCache) error {
 		}
 	}
 	for utxoSrcStr, _ := range slotCache.UtxosDel {
-
 		var utxoSrc UtxoSource
 		err := utxoSrc.FromStreamString(utxoSrcStr)
 		if err != nil {
@@ -422,8 +423,6 @@ func doGatherUtxoType1(goroutine goroutine_mgr.Goroutine, args ...interface{}) {
 					break
 				}
 				if (startBlockHeight > blockCount-20) || ((startBlockHeight%config.CacheConfig.SamplingBlockCount == 0) && (slotCache.CalcObjectCacheWeight() > config.CacheConfig.ObjectCacheWeightMax)) {
-					fmt.Println("startBlockHeight:", startBlockHeight)
-					fmt.Println("Weight", slotCache.CalcObjectCacheWeight())
 					err = applySlotCacheToDB(slotCache)
 					if err != nil {
 						quitFlag = true
@@ -440,7 +439,6 @@ func doGatherUtxoType1(goroutine goroutine_mgr.Goroutine, args ...interface{}) {
 						break
 					}
 					slotCache.Clear()
-					debug.FreeOSMemory()
 				}
 				startBlockHeight += 1
 			}
@@ -524,8 +522,6 @@ func doGatherUtxoType2(goroutine goroutine_mgr.Goroutine, args ...interface{}) {
 					break
 				}
 				if (startBlockHeight > blockCount-20) || ((startBlockHeight%config.CacheConfig.SamplingBlockCount == 0) && (slotCache.CalcObjectCacheWeight() > config.CacheConfig.ObjectCacheWeightMax)) {
-					fmt.Println("startBlockHeight:", startBlockHeight)
-					fmt.Println("Weight", slotCache.CalcObjectCacheWeight())
 					err = applySlotCacheToDB(slotCache)
 					if err != nil {
 						quitFlag = true
@@ -542,7 +538,6 @@ func doGatherUtxoType2(goroutine goroutine_mgr.Goroutine, args ...interface{}) {
 						break
 					}
 					slotCache.Clear()
-					debug.FreeOSMemory()
 				}
 				startBlockHeight += 1
 			}
