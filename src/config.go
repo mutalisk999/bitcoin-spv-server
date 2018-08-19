@@ -15,10 +15,6 @@ type CacheConfig struct {
 	ObjectCacheWeightMax int64  `json:"objectCacheWeightMax"`
 }
 
-type MemMaintainConfig struct {
-	HeapIdleSizeMax uint64 `json:"heapIdleSizeMax"`
-}
-
 type GatherConfig struct {
 	StoreRawTrx bool `json:"storeRawTrx"`
 }
@@ -44,7 +40,6 @@ type RpcServerConfig struct {
 type Config struct {
 	DBConfig          DBConfig          `json:"dbConfig"`
 	CacheConfig       CacheConfig       `json:"cacheConfig"`
-	MemMaintainConfig MemMaintainConfig `json:"memMaintainConfig"`
 	GatherConfig      GatherConfig      `json:"gatherConfig"`
 	RpcClientConfig   RpcClientConfig   `json:"rpcClientConfig"`
 	RpcServerConfig   RpcServerConfig   `json:"rpcServerConfig"`

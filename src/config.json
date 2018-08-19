@@ -7,9 +7,6 @@
     "samplingBlockCount": 50,
     "objectCacheWeightMax": 800000000
   },
-  "memMaintainConfig":{
-    "heapIdleSizeMax": 4000000000
-  },
   "gatherConfig":{
     "storeRawTrx": false
   },
