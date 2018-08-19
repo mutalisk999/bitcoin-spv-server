@@ -13,9 +13,10 @@ func doMemMaintain(goroutine goroutine_mgr.Goroutine, args ...interface{}) {
 		var mStat runtime.MemStats
 		runtime.ReadMemStats(&mStat)
 		if mStat.HeapIdle > config.MemMaintainConfig.HeapIdleSizeMax {
+			runtime.GC()
 			debug.FreeOSMemory()
 		}
-		time.Sleep(5 * 1000 * 1000 * 1000)
+		time.Sleep(5 * time.Second)
 	}
 }
 

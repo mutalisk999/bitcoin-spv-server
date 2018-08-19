@@ -491,7 +491,7 @@ func doGatherUtxoType2(goroutine goroutine_mgr.Goroutine, args ...interface{}) {
 		}
 
 		if startBlockHeight >= blockCount {
-			time.Sleep(5 * 1000 * 1000 * 1000)
+			time.Sleep(5 * time.Second)
 		} else {
 			for {
 				if quitFlag {
