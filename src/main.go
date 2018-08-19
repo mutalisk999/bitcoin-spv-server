@@ -85,7 +85,6 @@ func appInit() error {
 func appRun() error {
 	startSignalHandler()
 	startRpcServer()
-	startMemMaintainer()
 
 	if config.RpcClientConfig.DataSource == "btcWallet" {
 		// collect from the wallet node
