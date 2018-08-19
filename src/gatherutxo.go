@@ -442,16 +442,18 @@ func doGatherUtxoType1(goroutine goroutine_mgr.Goroutine, args ...interface{}) {
 				}
 				startBlockHeight += 1
 			}
-			// need to flush slot cache
-			err = applySlotCacheToDB(slotCache)
-			if err != nil {
-				quitFlag = true
-				break
-			}
-			err = storeStartBlockHeight(startBlockHeight)
-			if err != nil {
-				quitFlag = true
-				break
+			if config.CacheConfig.FlushCacheOnQuit {
+				// need to flush slot cache
+				err = applySlotCacheToDB(slotCache)
+				if err != nil {
+					quitFlag = true
+					break
+				}
+				err = storeStartBlockHeight(startBlockHeight)
+				if err != nil {
+					quitFlag = true
+					break
+				}
 			}
 			err = storeChainIndexState("1")
 			if err != nil {
@@ -541,16 +543,18 @@ func doGatherUtxoType2(goroutine goroutine_mgr.Goroutine, args ...interface{}) {
 				}
 				startBlockHeight += 1
 			}
-			// need to flush slot cache
-			err = applySlotCacheToDB(slotCache)
-			if err != nil {
-				quitFlag = true
-				break
-			}
-			err = storeStartBlockHeight(startBlockHeight)
-			if err != nil {
-				quitFlag = true
-				break
+			if config.CacheConfig.FlushCacheOnQuit {
+				// need to flush slot cache
+				err = applySlotCacheToDB(slotCache)
+				if err != nil {
+					quitFlag = true
+					break
+				}
+				err = storeStartBlockHeight(startBlockHeight)
+				if err != nil {
+					quitFlag = true
+					break
+				}
 			}
 			err = storeChainIndexState("1")
 			if err != nil {

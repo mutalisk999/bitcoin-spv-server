@@ -3,6 +3,7 @@
     "dbDir":"db"
   },
   "cacheConfig":{
+    "flushCacheOnQuit": false,
     "samplingBlockCount": 50,
     "objectCacheWeightMax": 800000000
   },

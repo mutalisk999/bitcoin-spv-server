@@ -10,6 +10,7 @@ type DBConfig struct {
 }
 
 type CacheConfig struct {
+	FlushCacheOnQuit     bool   `json:"flushCacheOnQuit"`
 	SamplingBlockCount   uint32 `json:"samplingBlockCount"`
 	ObjectCacheWeightMax int64  `json:"objectCacheWeightMax"`
 }
