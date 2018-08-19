@@ -6,11 +6,11 @@ import (
 	"fmt"
 	"github.com/mutalisk999/go-lib/src/sched/goroutine_mgr"
 	"github.com/stackimpact/stackimpact-go"
-	"net/http"
 	_ "net/http/pprof"
 	"os"
 	"runtime"
 	"strings"
+	"runtime/debug"
 )
 
 var goroutineMgr *goroutine_mgr.GoroutineManager
@@ -104,6 +104,9 @@ func appCmd() error {
 	var stdoutWriter *bufio.Writer
 	stdoutWriter = bufio.NewWriter(os.Stdout)
 	for {
+		if quitFlag {
+			break
+		}
 		_, err := stdoutWriter.WriteString(">>>")
 		if err != nil {
 			quitFlag = true
@@ -135,6 +138,9 @@ func appCmd() error {
 			runtime.ReadMemStats(&mStat)
 			fmt.Println("HeapAlloc:", mStat.HeapAlloc)
 			fmt.Println("HeapIdle:", mStat.HeapIdle)
+		} else if strLine == "memoryfree" {
+			runtime.GC()
+			debug.FreeOSMemory()
 		} else {
 			fmt.Println("not support command: ", strLine)
 		}
@@ -152,10 +158,6 @@ func appCmd() error {
 
 func main() {
 	var err error
-
-	go func() {
-		http.ListenAndServe("0.0.0.0:8080", nil)
-	}()
 
 	agent := stackimpact.Start(stackimpact.Options{
 		AgentKey: "0f6538f8e7589efb205d8dc44a4b9ba1ecfd0b11",
