@@ -38,11 +38,11 @@ type RpcServerConfig struct {
 }
 
 type Config struct {
-	DBConfig          DBConfig          `json:"dbConfig"`
-	CacheConfig       CacheConfig       `json:"cacheConfig"`
-	GatherConfig      GatherConfig      `json:"gatherConfig"`
-	RpcClientConfig   RpcClientConfig   `json:"rpcClientConfig"`
-	RpcServerConfig   RpcServerConfig   `json:"rpcServerConfig"`
+	DBConfig        DBConfig        `json:"dbConfig"`
+	CacheConfig     CacheConfig     `json:"cacheConfig"`
+	GatherConfig    GatherConfig    `json:"gatherConfig"`
+	RpcClientConfig RpcClientConfig `json:"rpcClientConfig"`
+	RpcServerConfig RpcServerConfig `json:"rpcServerConfig"`
 }
 
 type JsonStruct struct {

@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"encoding/hex"
 	"errors"
 	"github.com/mutalisk999/bitcoin-lib/src/bigint"
@@ -17,13 +16,11 @@ type UtxoSource struct {
 }
 
 func (u UtxoSource) ToStreamString() (string, error) {
-	bytesBuf := bytes.NewBuffer([]byte{})
-	bufWriter := io.Writer(bytesBuf)
-	err := serialize.PackUint32(bufWriter, u.Vout)
+	bytesUint32, err := uint32ToBytes(u.Vout)
 	if err != nil {
 		return "", err
 	}
-	streamStr := string(u.TrxId.GetData()) + string(bytesBuf.Bytes())
+	streamStr := string(u.TrxId.GetData()) + string(bytesUint32)
 	if len(streamStr) != 36 {
 		return "", errors.New("invalid stream string with wrong length")
 	}
@@ -36,9 +33,7 @@ func (u *UtxoSource) FromStreamString(streamStr string) error {
 	}
 	var err error
 	u.TrxId.SetData([]byte(streamStr[0:32]))
-	bytesBuf := bytes.NewBuffer([]byte(streamStr[32:36]))
-	bufReader := io.Reader(bytesBuf)
-	u.Vout, err = serialize.UnPackUint32(bufReader)
+	u.Vout, err = uint32FromBytes([]byte(streamStr[32:36]))
 	if err != nil {
 		return err
 	}

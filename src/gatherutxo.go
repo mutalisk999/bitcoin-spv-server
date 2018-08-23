@@ -134,6 +134,21 @@ func getStartBlockHeight() (uint32, error) {
 	return startBlockHeight, nil
 }
 
+func getStartTrxSequence() (uint32, error) {
+	var startTrxSequence uint32
+	trxSequenceStr, err := globalConfigDBMgr.DBGet("trxSequence")
+	if err != nil && err.Error() == LevelDBNotFound {
+		startTrxSequence = 0
+	} else {
+		ui64, err := strconv.ParseUint(trxSequenceStr, 10, 32)
+		if err != nil {
+			return 0, err
+		}
+		startTrxSequence = uint32(ui64)
+	}
+	return startTrxSequence, nil
+}
+
 func getChainIndexState() (string, error) {
 	state, err := globalConfigDBMgr.DBGet("chainIndexState")
 	if err != nil {
@@ -154,36 +169,31 @@ func storeChainIndexState(state string) error {
 }
 
 func applySlotCacheToDB(slotCache *SlotCache) error {
-	// deal addr trxs pair
-	for addrStr, trxIdsMap := range slotCache.AddrTrxsAdd {
+	// deal addr trxs
+	for addrStr, trxSeqsMap := range slotCache.AddrTrxsAdd {
 		// deep copy trxIdsMap, in order to avoid influence for AddrTrxsAdd
-		trxIdsMapDump := make(map[string]int)
-		for k, v := range trxIdsMap {
-			trxIdsMapDump[k] = v
+		trxSeqsMapDump := make(map[uint32]uint32)
+		for k, v := range trxSeqsMap {
+			trxSeqsMapDump[k] = v
 		}
-		trxIdsDB, err := addrTrxsDBMgr.DBGet(addrStr)
+		trxSeqsDB, err := addrTrxsDBMgr.DBGet(addrStr)
 		if err != nil && err.Error() == LevelDBNotFound {
-			trxIdsDB = []bigint.Uint256{}
+			trxSeqsDB = []uint32{}
 		}
-		for _, trxId := range trxIdsDB {
-			trxIdsMapDump[string(trxId.GetData())] = 0
+		for _, trxSeq := range trxSeqsDB {
+			trxSeqsMapDump[trxSeq] = 0
 		}
-		trxIdsNew := make([]bigint.Uint256, 0, len(trxIdsMapDump))
-		for trxIdStr, _ := range trxIdsMapDump {
-			var trxId bigint.Uint256
-			err = trxId.SetData([]byte(trxIdStr))
-			if err != nil {
-				return err
-			}
-			trxIdsNew = append(trxIdsNew, trxId)
+		trxSeqsNew := make([]uint32, 0, len(trxSeqsMapDump))
+		for trxSeq, _ := range trxSeqsMapDump {
+			trxSeqsNew = append(trxSeqsNew, trxSeq)
 		}
-		err = addrTrxsDBMgr.DBPut(addrStr, trxIdsNew)
+		err = addrTrxsDBMgr.DBPut(addrStr, trxSeqsNew)
 		if err != nil {
 			return err
 		}
 	}
 
-	// deal utxo pair
+	// deal utxo
 	for utxoSrcStr, utxoDetail := range slotCache.UtxosAdd {
 		var utxoSrc UtxoSource
 		err := utxoSrc.FromStreamString(utxoSrcStr)
@@ -207,7 +217,20 @@ func applySlotCacheToDB(slotCache *SlotCache) error {
 		}
 	}
 
-	// deal raw trx pair
+	// deal trx seq
+	for trxSeq, trxIdStr := range slotCache.TrxSeqAdd {
+		var trxId bigint.Uint256
+		err := trxId.SetData([]byte(trxIdStr))
+		if err != nil {
+			return err
+		}
+		err = trxSeqDBMgr.DBPut(trxSeq, trxId)
+		if err != nil {
+			return err
+		}
+	}
+
+	// deal raw trx
 	for trxIdStr, rawTrxData := range slotCache.RawTrxsAdd {
 		var trxId bigint.Uint256
 		err := trxId.SetData([]byte(trxIdStr))
@@ -231,7 +254,15 @@ func storeStartBlockHeight(blockHeight uint32) error {
 	return nil
 }
 
-func dealWithVinToCache(vin transaction.TxIn, trxId bigint.Uint256) error {
+func storeStartTrxSequence(trxSequence uint32) error {
+	err := globalConfigDBMgr.DBPut("trxSequence", strconv.Itoa(int(trxSequence)))
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func dealWithVinToCache(trxSeq uint32, vin transaction.TxIn, trxId bigint.Uint256) error {
 	// deal trx utxo pair
 	// query from slot cache, if not found, query from leveldb
 	var utxoSource UtxoSource
@@ -262,13 +293,13 @@ func dealWithVinToCache(vin transaction.TxIn, trxId bigint.Uint256) error {
 		}
 		if addrStr != "" {
 			// add to slot cache
-			slotCache.AddAddrTrx(addrStr, trxId)
+			slotCache.AddAddrTrx(addrStr, trxSeq)
 		}
 	}
 	return nil
 }
 
-func dealWithVoutToCache(blockHeight uint32, vout transaction.TxOut, trxId bigint.Uint256, index uint32) error {
+func dealWithVoutToCache(blockHeight uint32, trxSeq uint32, vout transaction.TxOut, trxId bigint.Uint256, index uint32) error {
 	var scriptPubKey script.Script
 	var addrStr string
 
@@ -283,7 +314,7 @@ func dealWithVoutToCache(blockHeight uint32, vout transaction.TxOut, trxId bigin
 		}
 		if addrStr != "" {
 			// add to slot cache
-			slotCache.AddAddrTrx(addrStr, trxId)
+			slotCache.AddAddrTrx(addrStr, trxSeq)
 		}
 	}
 	// deal trx utxo pair
@@ -319,24 +350,36 @@ func dealWithRawTrxToCache(trxId bigint.Uint256, trx *transaction.Transaction) e
 	return nil
 }
 
+func dealWithTrxSeqToCache(trxSeq uint32, trxId bigint.Uint256) error {
+	slotCache.AddTrxSeq(trxSeq, string(trxId.GetData()))
+	return nil
+}
+
 func dealWithTrxToCache(blockHeight uint32, trx *transaction.Transaction, isCoinBase bool) error {
 	trxId, err := trx.CalcTrxId()
 	if err != nil {
 		return err
 	}
+
+	newTrxSequence := startTrxSequence + 1
 	if !isCoinBase {
 		for _, vin := range trx.Vin {
-			err := dealWithVinToCache(vin, trxId)
+			err := dealWithVinToCache(newTrxSequence, vin, trxId)
 			if err != nil {
 				return err
 			}
 		}
 	}
 	for index, vout := range trx.Vout {
-		err := dealWithVoutToCache(blockHeight, vout, trxId, uint32(index))
+		err := dealWithVoutToCache(blockHeight, newTrxSequence, vout, trxId, uint32(index))
 		if err != nil {
 			return err
 		}
+	}
+
+	err = dealWithTrxSeqToCache(newTrxSequence, trxId)
+	if err != nil {
+		return err
 	}
 	if config.GatherConfig.StoreRawTrx {
 		err = dealWithRawTrxToCache(trxId, trx)
@@ -344,6 +387,7 @@ func dealWithTrxToCache(blockHeight uint32, trx *transaction.Transaction, isCoin
 			return err
 		}
 	}
+	startTrxSequence = newTrxSequence
 
 	return nil
 }
@@ -379,6 +423,11 @@ func doGatherUtxoType1(goroutine goroutine_mgr.Goroutine, args ...interface{}) {
 		return
 	}
 
+	startTrxSequence, err = getStartTrxSequence()
+	if err != nil {
+		return
+	}
+
 	for {
 		if quitFlag {
 			break
@@ -400,9 +449,9 @@ func doGatherUtxoType1(goroutine goroutine_mgr.Goroutine, args ...interface{}) {
 				if startBlockHeight >= blockCount {
 					break
 				}
-				NewBlockHeight := startBlockHeight + 1
+				newBlockHeight := startBlockHeight + 1
 
-				blockHash, err := getBlockHashRpcType1(NewBlockHeight)
+				blockHash, err := getBlockHashRpcType1(newBlockHeight)
 				if err != nil {
 					quitFlag = true
 					break
@@ -417,7 +466,7 @@ func doGatherUtxoType1(goroutine goroutine_mgr.Goroutine, args ...interface{}) {
 					quitFlag = true
 					break
 				}
-				err = dealWithRawBlock(NewBlockHeight, &rawBlockData)
+				err = dealWithRawBlock(newBlockHeight, &rawBlockData)
 				if err != nil {
 					quitFlag = true
 					break
@@ -428,7 +477,12 @@ func doGatherUtxoType1(goroutine goroutine_mgr.Goroutine, args ...interface{}) {
 						quitFlag = true
 						break
 					}
-					err = storeStartBlockHeight(NewBlockHeight)
+					err = storeStartBlockHeight(newBlockHeight)
+					if err != nil {
+						quitFlag = true
+						break
+					}
+					err = storeStartTrxSequence(startTrxSequence)
 					if err != nil {
 						quitFlag = true
 						break
@@ -450,6 +504,11 @@ func doGatherUtxoType1(goroutine goroutine_mgr.Goroutine, args ...interface{}) {
 					break
 				}
 				err = storeStartBlockHeight(startBlockHeight)
+				if err != nil {
+					quitFlag = true
+					break
+				}
+				err = storeStartTrxSequence(startTrxSequence)
 				if err != nil {
 					quitFlag = true
 					break
@@ -476,6 +535,11 @@ func doGatherUtxoType2(goroutine goroutine_mgr.Goroutine, args ...interface{}) {
 	var err error
 
 	startBlockHeight, err = getStartBlockHeight()
+	if err != nil {
+		return
+	}
+
+	startTrxSequence, err = getStartTrxSequence()
 	if err != nil {
 		return
 	}
@@ -534,6 +598,11 @@ func doGatherUtxoType2(goroutine goroutine_mgr.Goroutine, args ...interface{}) {
 						quitFlag = true
 						break
 					}
+					err = storeStartTrxSequence(startTrxSequence)
+					if err != nil {
+						quitFlag = true
+						break
+					}
 					err = storeChainIndexState("1")
 					if err != nil {
 						quitFlag = true
@@ -551,6 +620,11 @@ func doGatherUtxoType2(goroutine goroutine_mgr.Goroutine, args ...interface{}) {
 					break
 				}
 				err = storeStartBlockHeight(startBlockHeight)
+				if err != nil {
+					quitFlag = true
+					break
+				}
+				err = storeStartTrxSequence(startTrxSequence)
 				if err != nil {
 					quitFlag = true
 					break

@@ -1,12 +1,9 @@
 package main
 
 import (
-	"bytes"
 	"errors"
 	"github.com/mutalisk999/bitcoin-lib/src/bigint"
-	"github.com/mutalisk999/bitcoin-lib/src/serialize"
 	"github.com/syndtr/goleveldb/leveldb"
-	"io"
 )
 
 var LevelDBNotFound = "leveldb: not found"
@@ -27,7 +24,7 @@ type AddrTrxsDBMgr struct {
 
 type AddrTrxsPair struct {
 	AddrTrxsKey   string
-	AddrTrxsValue []bigint.Uint256
+	AddrTrxsValue []uint32
 	AddrTrxsOp    byte // 0 put, 1 delete
 }
 
@@ -39,6 +36,16 @@ type UtxoPair struct {
 	UtxoKey   UtxoSource
 	UtxoValue UtxoDetail
 	UtxoOp    byte // 0 put, 1 delete
+}
+
+type TrxSeqDBMgr struct {
+	db *leveldb.DB
+}
+
+type TrxSeqPair struct {
+	TrxSeqKey  uint32
+	TrxIdValue bigint.Uint256
+	TrxSeqOp   byte // 0 put, 1 delete
 }
 
 type RawTrxDBMgr struct {
@@ -127,42 +134,8 @@ func (a *AddrTrxsDBMgr) DBClose() error {
 	return nil
 }
 
-func trxIdsToBytes(trxIds []bigint.Uint256) ([]byte, error) {
-	bytesBuf := bytes.NewBuffer([]byte{})
-	bufWriter := io.Writer(bytesBuf)
-	err := serialize.PackCompactSize(bufWriter, uint64(len(trxIds)))
-	if err != nil {
-		return []byte{}, err
-	}
-	for _, trxId := range trxIds {
-		err = trxId.Pack(bufWriter)
-		if err != nil {
-			return []byte{}, err
-		}
-	}
-	return bytesBuf.Bytes(), nil
-}
-
-func trxIdsFromBytes(bytesTrxIds []byte) ([]bigint.Uint256, error) {
-	bufReader := io.Reader(bytes.NewBuffer(bytesTrxIds))
-	ui64, err := serialize.UnPackCompactSize(bufReader)
-	if err != nil {
-		return []bigint.Uint256{}, err
-	}
-	trxIds := make([]bigint.Uint256, ui64, ui64)
-	for i := 0; i < int(ui64); i++ {
-		var trxId bigint.Uint256
-		err = trxId.UnPack(bufReader)
-		if err != nil {
-			return []bigint.Uint256{}, err
-		}
-		trxIds[i] = trxId
-	}
-	return trxIds, nil
-}
-
-func (a AddrTrxsDBMgr) DBPut(key string, value []bigint.Uint256) error {
-	bytesValue, err := trxIdsToBytes(value)
+func (a AddrTrxsDBMgr) DBPut(key string, value []uint32) error {
+	bytesValue, err := trxSeqsToBytes(value)
 	if err != nil {
 		return err
 	}
@@ -173,12 +146,12 @@ func (a AddrTrxsDBMgr) DBPut(key string, value []bigint.Uint256) error {
 	return nil
 }
 
-func (a AddrTrxsDBMgr) DBGet(key string) ([]bigint.Uint256, error) {
+func (a AddrTrxsDBMgr) DBGet(key string) ([]uint32, error) {
 	bytesValue, err := a.db.Get([]byte(key), nil)
 	if err != nil {
 		return nil, err
 	}
-	trxIds, err := trxIdsFromBytes(bytesValue)
+	trxIds, err := trxSeqsFromBytes(bytesValue)
 	return trxIds, nil
 }
 
@@ -194,7 +167,7 @@ func (a AddrTrxsDBMgr) DBBatch(addrTrxs []AddrTrxsPair) error {
 	batch := new(leveldb.Batch)
 	for _, addrTrx := range addrTrxs {
 		if addrTrx.AddrTrxsOp == 0 {
-			bytesValue, err := trxIdsToBytes(addrTrx.AddrTrxsValue)
+			bytesValue, err := trxSeqsToBytes(addrTrx.AddrTrxsValue)
 			if err != nil {
 				return err
 			}
@@ -227,36 +200,6 @@ func (t *UtxoDBMgr) DBClose() error {
 		return err
 	}
 	return nil
-}
-
-func utxoSrcToBytes(utxoSrc UtxoSource) ([]byte, error) {
-	bytesBuf := bytes.NewBuffer([]byte{})
-	bufWriter := io.Writer(bytesBuf)
-	err := utxoSrc.Pack(bufWriter)
-	if err != nil {
-		return []byte{}, err
-	}
-	return bytesBuf.Bytes(), nil
-}
-
-func utxoDetailToBytes(utxoDetail UtxoDetail) ([]byte, error) {
-	bytesBuf := bytes.NewBuffer([]byte{})
-	bufWriter := io.Writer(bytesBuf)
-	err := utxoDetail.Pack(bufWriter)
-	if err != nil {
-		return []byte{}, err
-	}
-	return bytesBuf.Bytes(), nil
-}
-
-func utxoDetailFromBytes(bytesUtxoDetail []byte) (UtxoDetail, error) {
-	var utxoDetail UtxoDetail
-	bufReader := io.Reader(bytes.NewBuffer(bytesUtxoDetail))
-	err := utxoDetail.UnPack(bufReader)
-	if err != nil {
-		return UtxoDetail{}, err
-	}
-	return utxoDetail, nil
 }
 
 func (t UtxoDBMgr) DBPut(key UtxoSource, value UtxoDetail) error {
@@ -330,6 +273,93 @@ func (t UtxoDBMgr) DBBatch(trxUtxos []UtxoPair) error {
 	return nil
 }
 
+func (t *TrxSeqDBMgr) DBOpen(dbFile string) error {
+	var err error
+	t.db, err = leveldb.OpenFile(dbFile, nil)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (t *TrxSeqDBMgr) DBClose() error {
+	err := t.db.Close()
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (t TrxSeqDBMgr) DBPut(key uint32, value bigint.Uint256) error {
+	bytesKey, err := uint32ToBytes(key)
+	if err != nil {
+		return err
+	}
+	bytesValue, err := uint256ToBytes(value)
+	if err != nil {
+		return err
+	}
+	err = t.db.Put(bytesKey, bytesValue, nil)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (t TrxSeqDBMgr) DBGet(key uint32) (bigint.Uint256, error) {
+	bytesKey, err := uint32ToBytes(key)
+	if err != nil {
+		return bigint.Uint256{}, err
+	}
+	bytesValue, err := t.db.Get(bytesKey, nil)
+	if err != nil {
+		return bigint.Uint256{}, err
+	}
+	ui256, err := uint256FromBytes(bytesValue)
+	if err != nil {
+		return bigint.Uint256{}, err
+	}
+	return ui256, nil
+}
+
+func (t TrxSeqDBMgr) DBDelete(key uint32) error {
+	bytesKey, err := uint32ToBytes(key)
+	if err != nil {
+		return err
+	}
+	err = t.db.Delete(bytesKey, nil)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (r TrxSeqDBMgr) DBBatch(trxSeqs []TrxSeqPair) error {
+	batch := new(leveldb.Batch)
+	for _, trxSeq := range trxSeqs {
+		bytesKey, err := uint32ToBytes(trxSeq.TrxSeqKey)
+		if err != nil {
+			return err
+		}
+		if trxSeq.TrxSeqOp == 0 {
+			bytesValue, err := uint256ToBytes(trxSeq.TrxIdValue)
+			if err != nil {
+				return err
+			}
+			batch.Put(bytesKey, bytesValue)
+		} else if trxSeq.TrxSeqOp == 1 {
+			batch.Delete(bytesKey)
+		} else {
+			return errors.New("TrxSeqOp type not support")
+		}
+	}
+	err := r.db.Write(batch, nil)
+	if err != nil && err.Error() != LevelDBNotFound {
+		return err
+	}
+	return nil
+}
+
 func (r *RawTrxDBMgr) DBOpen(dbFile string) error {
 	var err error
 	r.db, err = leveldb.OpenFile(dbFile, nil)
@@ -345,16 +375,6 @@ func (r *RawTrxDBMgr) DBClose() error {
 		return err
 	}
 	return nil
-}
-
-func uint256ToBytes(uint256 bigint.Uint256) ([]byte, error) {
-	bytesBuf := bytes.NewBuffer([]byte{})
-	bufWriter := io.Writer(bytesBuf)
-	err := uint256.Pack(bufWriter)
-	if err != nil {
-		return []byte{}, err
-	}
-	return bytesBuf.Bytes(), nil
 }
 
 func (r RawTrxDBMgr) DBPut(key bigint.Uint256, value []byte) error {

@@ -9,14 +9,15 @@ import (
 	_ "net/http/pprof"
 	"os"
 	"runtime"
-	"strings"
 	"runtime/debug"
+	"strings"
 )
 
 var goroutineMgr *goroutine_mgr.GoroutineManager
 var globalConfigDBMgr *GlobalConfigDBMgr
 var addrTrxsDBMgr *AddrTrxsDBMgr
 var utxoDBMgr *UtxoDBMgr
+var trxSeqDBMgr *TrxSeqDBMgr
 var rawTrxDBMgr *RawTrxDBMgr
 
 var quitFlag = false
@@ -24,6 +25,7 @@ var quitChan chan byte
 var config Config
 
 var startBlockHeight uint32
+var startTrxSequence uint32
 
 func appInit() error {
 	var err error
@@ -48,14 +50,21 @@ func appInit() error {
 
 	// init address trx db manager
 	addrTrxsDBMgr = new(AddrTrxsDBMgr)
-	err = addrTrxsDBMgr.DBOpen(config.DBConfig.DBDir + "/" + "address_trx_db")
+	err = addrTrxsDBMgr.DBOpen(config.DBConfig.DBDir + "/" + "addr_trx_db")
 	if err != nil {
 		return err
 	}
 
 	// init trx utxo db manager
 	utxoDBMgr = new(UtxoDBMgr)
-	err = utxoDBMgr.DBOpen(config.DBConfig.DBDir + "/" + "trx_utxo_db")
+	err = utxoDBMgr.DBOpen(config.DBConfig.DBDir + "/" + "utxo_db")
+	if err != nil {
+		return err
+	}
+
+	// init trx seq db manager
+	trxSeqDBMgr = new(TrxSeqDBMgr)
+	err = trxSeqDBMgr.DBOpen(config.DBConfig.DBDir + "/" + "trx_seq_db")
 	if err != nil {
 		return err
 	}
@@ -129,6 +138,8 @@ func appCmd() error {
 			break
 		} else if strLine == "getblockcount" {
 			fmt.Println(startBlockHeight)
+		} else if strLine == "gettrxcount" {
+			fmt.Println(startTrxSequence)
 		} else if strLine == "getslotweight" {
 			fmt.Println(slotCache.CalcObjectCacheWeight())
 		} else if strLine == "goroutinestatus" {
@@ -151,6 +162,7 @@ func appCmd() error {
 	globalConfigDBMgr.DBClose()
 	addrTrxsDBMgr.DBClose()
 	utxoDBMgr.DBClose()
+	trxSeqDBMgr.DBClose()
 	rawTrxDBMgr.DBClose()
 
 	return nil

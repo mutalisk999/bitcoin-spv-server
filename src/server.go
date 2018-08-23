@@ -22,12 +22,21 @@ func (s *Service) GetBlockCount(r *http.Request, args *interface{}, reply *uint3
 	return nil
 }
 
+func (s *Service) GetTrxCount(r *http.Request, args *interface{}, reply *uint32) error {
+	*reply = startTrxSequence
+	return nil
+}
+
 func (s *Service) GetAddressTrxs(r *http.Request, args *string, reply *[]string) error {
-	trxIds, err := addrTrxsDBMgr.DBGet(*args)
+	trxSeqs, err := addrTrxsDBMgr.DBGet(*args)
 	if err != nil {
 		return errors.New("address not found")
 	}
-	for _, trxId := range trxIds {
+	for _, trxSeq := range trxSeqs {
+		trxId, err := trxSeqDBMgr.DBGet(trxSeq)
+		if err != nil {
+			return errors.New("trx sequence not found")
+		}
 		*reply = append(*reply, trxId.GetHex())
 	}
 	return nil
@@ -81,11 +90,15 @@ func (s *Service) GetUtxo(r *http.Request, args *UtxoSourcePrintAble, reply *Utx
 }
 
 func (s *Service) ListUnSpent(r *http.Request, args *string, reply *[]UtxoDetailPrintAble) error {
-	trxIds, err := addrTrxsDBMgr.DBGet(*args)
+	trxSeqs, err := addrTrxsDBMgr.DBGet(*args)
 	if err != nil {
 		return errors.New("address not found")
 	}
-	for _, trxId := range trxIds {
+	for _, trxSeq := range trxSeqs {
+		trxId, err := trxSeqDBMgr.DBGet(trxSeq)
+		if err != nil {
+			return errors.New("trx sequence not found")
+		}
 		bytesRawTrx, err := rawTrxDBMgr.DBGet(trxId)
 		if err != nil {
 			return errors.New("transaction id not found")

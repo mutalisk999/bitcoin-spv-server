@@ -1,41 +1,43 @@
 package main
 
 import (
-	"github.com/mutalisk999/bitcoin-lib/src/bigint"
 	"sync"
 )
 
 type SlotCache struct {
-	AddrTrxsAdd map[string]map[string]int
+	AddrTrxsAdd map[string]map[uint32]uint32
 	UtxosAdd    map[string]UtxoDetail
-	UtxosDel    map[string]int
+	UtxosDel    map[string]uint32
+	TrxSeqAdd   map[uint32]string
 	RawTrxsAdd  map[string][]byte
 	Mutex       *sync.Mutex
 }
 
 func (s *SlotCache) Initialize() {
-	s.AddrTrxsAdd = make(map[string]map[string]int)
+	s.AddrTrxsAdd = make(map[string]map[uint32]uint32)
 	s.UtxosAdd = make(map[string]UtxoDetail)
-	s.UtxosDel = make(map[string]int)
+	s.UtxosDel = make(map[string]uint32)
+	s.TrxSeqAdd = make(map[uint32]string)
 	s.RawTrxsAdd = make(map[string][]byte)
 	s.Mutex = new(sync.Mutex)
 }
 
 func (s *SlotCache) Clear() {
-	s.AddrTrxsAdd = make(map[string]map[string]int)
+	s.AddrTrxsAdd = make(map[string]map[uint32]uint32)
 	s.UtxosAdd = make(map[string]UtxoDetail)
-	s.UtxosDel = make(map[string]int)
+	s.UtxosDel = make(map[string]uint32)
+	s.TrxSeqAdd = make(map[uint32]string)
 	s.RawTrxsAdd = make(map[string][]byte)
 	s.Mutex = new(sync.Mutex)
 }
 
-func (s *SlotCache) AddAddrTrx(addrStr string, trxId bigint.Uint256) {
+func (s *SlotCache) AddAddrTrx(addrStr string, trxSeq uint32) {
 	s.Mutex.Lock()
 	trxIdsMapByAddr, ok := s.AddrTrxsAdd[addrStr]
 	if !ok {
-		trxIdsMapByAddr = make(map[string]int)
+		trxIdsMapByAddr = make(map[uint32]uint32)
 	}
-	trxIdsMapByAddr[string(trxId.GetData())] = 0
+	trxIdsMapByAddr[trxSeq] = 0
 	s.AddrTrxsAdd[addrStr] = trxIdsMapByAddr
 	s.Mutex.Unlock()
 }
@@ -78,6 +80,12 @@ func (s *SlotCache) DelUtxo(utxoSrc UtxoSource) error {
 	return nil
 }
 
+func (s *SlotCache) AddTrxSeq(trxSeq uint32, trxIdStr string) {
+	s.Mutex.Lock()
+	s.TrxSeqAdd[trxSeq] = trxIdStr
+	s.Mutex.Unlock()
+}
+
 func (s *SlotCache) AddRawTrx(trxIdStr string, rawTrxData []byte) {
 	s.Mutex.Lock()
 	s.RawTrxsAdd[trxIdStr] = rawTrxData
@@ -87,18 +95,20 @@ func (s *SlotCache) AddRawTrx(trxIdStr string, rawTrxData []byte) {
 func (s *SlotCache) CalcObjectCacheWeight() int64 {
 	var addrTrxsWeight int64 = 0
 	var utxosWeight int64 = 0
+	var trxSeqWeight int64 = 0
 	var rawTrxsWeight int64 = 0
 	var totalWeight int64 = 0
 
 	s.Mutex.Lock()
 	for _, v := range s.AddrTrxsAdd {
-		addrTrxsWeight = addrTrxsWeight + int64(30) + int64(32)*int64(len(v))
+		addrTrxsWeight = addrTrxsWeight + int64(30) + int64(8)*int64(len(v))
 	}
 	utxosWeight = int64(108)*int64(len(s.UtxosAdd)) + int64(36)*int64(len(s.UtxosDel))
+	trxSeqWeight = int64(36) * int64(len(s.TrxSeqAdd))
 	for _, v := range s.RawTrxsAdd {
 		rawTrxsWeight = rawTrxsWeight + int64(32) + int64(len(v))
 	}
-	totalWeight = addrTrxsWeight + utxosWeight + rawTrxsWeight
+	totalWeight = addrTrxsWeight + utxosWeight + trxSeqWeight + rawTrxsWeight
 	s.Mutex.Unlock()
 	return totalWeight
 }
