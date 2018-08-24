@@ -6,7 +6,8 @@ import (
 )
 
 type DBConfig struct {
-	DBDir string `json:"dbDir"`
+	DBDir  string `json:"dbDir"`
+	DbType string `json:"dbType"`
 }
 
 type CacheConfig struct {

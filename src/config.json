@@ -1,6 +1,7 @@
 {
   "dbConfig":{
-    "dbDir":"db"
+    "dbDir":"db",
+    "dbType":"leveldb"
   },
   "cacheConfig":{
     "flushCacheOnQuit": false,

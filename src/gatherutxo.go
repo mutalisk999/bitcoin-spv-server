@@ -122,7 +122,7 @@ func getRawBlockType2(blockHash string) (string, error) {
 func getStartBlockHeight() (uint32, error) {
 	var startBlockHeight uint32
 	blockHeightStr, err := globalConfigDBMgr.DBGet("blockHeight")
-	if err != nil && err.Error() == LevelDBNotFound {
+	if err != nil && err.Error() == NotFoundError {
 		startBlockHeight = 0
 	} else {
 		ui64, err := strconv.ParseUint(blockHeightStr, 10, 32)
@@ -137,7 +137,7 @@ func getStartBlockHeight() (uint32, error) {
 func getStartTrxSequence() (uint32, error) {
 	var startTrxSequence uint32
 	trxSequenceStr, err := globalConfigDBMgr.DBGet("trxSequence")
-	if err != nil && err.Error() == LevelDBNotFound {
+	if err != nil && err.Error() == NotFoundError {
 		startTrxSequence = 0
 	} else {
 		ui64, err := strconv.ParseUint(trxSequenceStr, 10, 32)
@@ -177,7 +177,7 @@ func applySlotCacheToDB(slotCache *SlotCache) error {
 			trxSeqsMapDump[k] = v
 		}
 		trxSeqsDB, err := addrTrxsDBMgr.DBGet(addrStr)
-		if err != nil && err.Error() == LevelDBNotFound {
+		if err != nil && err.Error() == NotFoundError {
 			trxSeqsDB = []uint32{}
 		}
 		for _, trxSeq := range trxSeqsDB {
@@ -272,7 +272,7 @@ func dealWithVinToCache(trxSeq uint32, vin transaction.TxIn, trxId bigint.Uint25
 	if !ok {
 		var err error
 		utxoDetail, err = utxoDBMgr.DBGet(utxoSource)
-		if err != nil && err.Error() == LevelDBNotFound {
+		if err != nil && err.Error() == NotFoundError {
 			return errors.New("can not find prevout trxid: " + vin.PrevOut.Hash.GetHex() + ", vout: " + strconv.Itoa(int(vin.PrevOut.N)))
 		}
 	}

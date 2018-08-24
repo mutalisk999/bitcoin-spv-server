@@ -5,7 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/mutalisk999/go-lib/src/sched/goroutine_mgr"
-	"github.com/stackimpact/stackimpact-go"
+	"github.com/tecbot/gorocksdb"
 	_ "net/http/pprof"
 	"os"
 	"runtime"
@@ -40,6 +40,19 @@ func appInit() error {
 	// init goroutine manager
 	goroutineMgr = new(goroutine_mgr.GoroutineManager)
 	goroutineMgr.Initialise("MainGoroutineManager")
+
+	// init db config
+	if config.DBConfig.DbType == "leveldb" {
+		NotFoundError = NotFoundErrorLevelDB
+	} else if config.DBConfig.DbType == "rocksdb" {
+		NotFoundError = NotFoundErrorRocksDB
+		RocksDBCreateOpt = gorocksdb.NewDefaultOptions()
+		RocksDBCreateOpt.SetCreateIfMissing(true)
+		RocksDBReadOpt = gorocksdb.NewDefaultReadOptions()
+		RocksDBWriteOpt = gorocksdb.NewDefaultWriteOptions()
+	} else {
+		return errors.New("invalid db type")
+	}
 
 	// init global config db manager
 	globalConfigDBMgr = new(GlobalConfigDBMgr)
@@ -79,7 +92,7 @@ func appInit() error {
 	// get chain index state
 	state, err := getChainIndexState()
 	if err != nil {
-		if err.Error() != LevelDBNotFound {
+		if err.Error() != NotFoundError {
 			return err
 		}
 	} else {
@@ -170,14 +183,6 @@ func appCmd() error {
 
 func main() {
 	var err error
-
-	agent := stackimpact.Start(stackimpact.Options{
-		AgentKey: "0f6538f8e7589efb205d8dc44a4b9ba1ecfd0b11",
-		AppName:  "MyGoApp",
-	})
-	agent.StartCPUProfiler()
-	agent.StartBlockProfiler()
-	agent.ReportAllocationProfile()
 
 	// init config
 	jsonParser := new(JsonStruct)

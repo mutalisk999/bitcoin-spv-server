@@ -1,66 +1,32 @@
 package main
 
 import (
-	"errors"
 	"github.com/mutalisk999/bitcoin-lib/src/bigint"
-	"github.com/syndtr/goleveldb/leveldb"
 )
 
-var LevelDBNotFound = "leveldb: not found"
-
 type GlobalConfigDBMgr struct {
-	db *leveldb.DB
-}
-
-type GlobalConfigPair struct {
-	GlobalConfigKey   string
-	GlobalConfigValue string
-	GlobalConfigOp    byte // 0 put, 1 delete
+	db *DBCommon
 }
 
 type AddrTrxsDBMgr struct {
-	db *leveldb.DB
-}
-
-type AddrTrxsPair struct {
-	AddrTrxsKey   string
-	AddrTrxsValue []uint32
-	AddrTrxsOp    byte // 0 put, 1 delete
+	db *DBCommon
 }
 
 type UtxoDBMgr struct {
-	db *leveldb.DB
-}
-
-type UtxoPair struct {
-	UtxoKey   UtxoSource
-	UtxoValue UtxoDetail
-	UtxoOp    byte // 0 put, 1 delete
+	db *DBCommon
 }
 
 type TrxSeqDBMgr struct {
-	db *leveldb.DB
-}
-
-type TrxSeqPair struct {
-	TrxSeqKey  uint32
-	TrxIdValue bigint.Uint256
-	TrxSeqOp   byte // 0 put, 1 delete
+	db *DBCommon
 }
 
 type RawTrxDBMgr struct {
-	db *leveldb.DB
-}
-
-type RawTrxPair struct {
-	TrxIdKey        bigint.Uint256
-	RawTrxDataValue []byte
-	RawTrxOp        byte // 0 put, 1 delete
+	db *DBCommon
 }
 
 func (g *GlobalConfigDBMgr) DBOpen(dbFile string) error {
-	var err error
-	g.db, err = leveldb.OpenFile(dbFile, nil)
+	g.db = new(DBCommon)
+	err := g.db.DBOpen(dbFile)
 	if err != nil {
 		return err
 	}
@@ -68,7 +34,7 @@ func (g *GlobalConfigDBMgr) DBOpen(dbFile string) error {
 }
 
 func (g *GlobalConfigDBMgr) DBClose() error {
-	err := g.db.Close()
+	err := g.db.DBClose()
 	if err != nil {
 		return err
 	}
@@ -76,7 +42,7 @@ func (g *GlobalConfigDBMgr) DBClose() error {
 }
 
 func (g GlobalConfigDBMgr) DBPut(key string, value string) error {
-	err := g.db.Put([]byte(key), []byte(value), nil)
+	err := g.db.DBPut([]byte(key), []byte(value))
 	if err != nil {
 		return err
 	}
@@ -84,7 +50,7 @@ func (g GlobalConfigDBMgr) DBPut(key string, value string) error {
 }
 
 func (g GlobalConfigDBMgr) DBGet(key string) (string, error) {
-	valueBytes, err := g.db.Get([]byte(key), nil)
+	valueBytes, err := g.db.DBGet([]byte(key))
 	if err != nil {
 		return "", err
 	}
@@ -92,34 +58,16 @@ func (g GlobalConfigDBMgr) DBGet(key string) (string, error) {
 }
 
 func (g GlobalConfigDBMgr) DBDelete(key string) error {
-	err := g.db.Delete([]byte(key), nil)
+	err := g.db.DBDelete([]byte(key))
 	if err != nil {
 		return err
 	}
 	return nil
 }
 
-func (g GlobalConfigDBMgr) DBBatch(globalConfigs []GlobalConfigPair) error {
-	batch := new(leveldb.Batch)
-	for _, globalConfig := range globalConfigs {
-		if globalConfig.GlobalConfigOp == 0 {
-			batch.Put([]byte(globalConfig.GlobalConfigKey), []byte(globalConfig.GlobalConfigValue))
-		} else if globalConfig.GlobalConfigOp == 1 {
-			batch.Delete([]byte(globalConfig.GlobalConfigKey))
-		} else {
-			return errors.New("GlobalConfigOp type not support")
-		}
-	}
-	err := g.db.Write(batch, nil)
-	if err != nil && err.Error() != LevelDBNotFound {
-		return err
-	}
-	return nil
-}
-
 func (a *AddrTrxsDBMgr) DBOpen(dbFile string) error {
-	var err error
-	a.db, err = leveldb.OpenFile(dbFile, nil)
+	a.db = new(DBCommon)
+	err := a.db.DBOpen(dbFile)
 	if err != nil {
 		return err
 	}
@@ -127,7 +75,7 @@ func (a *AddrTrxsDBMgr) DBOpen(dbFile string) error {
 }
 
 func (a *AddrTrxsDBMgr) DBClose() error {
-	err := a.db.Close()
+	err := a.db.DBClose()
 	if err != nil {
 		return err
 	}
@@ -135,11 +83,11 @@ func (a *AddrTrxsDBMgr) DBClose() error {
 }
 
 func (a AddrTrxsDBMgr) DBPut(key string, value []uint32) error {
-	bytesValue, err := trxSeqsToBytes(value)
+	valueBytes, err := trxSeqsToBytes(value)
 	if err != nil {
 		return err
 	}
-	err = a.db.Put([]byte(key), bytesValue, nil)
+	err = a.db.DBPut([]byte(key), valueBytes)
 	if err != nil {
 		return err
 	}
@@ -147,135 +95,83 @@ func (a AddrTrxsDBMgr) DBPut(key string, value []uint32) error {
 }
 
 func (a AddrTrxsDBMgr) DBGet(key string) ([]uint32, error) {
-	bytesValue, err := a.db.Get([]byte(key), nil)
+	valueBytes, err := a.db.DBGet([]byte(key))
 	if err != nil {
 		return nil, err
 	}
-	trxIds, err := trxSeqsFromBytes(bytesValue)
+	trxIds, err := trxSeqsFromBytes(valueBytes)
 	return trxIds, nil
 }
 
 func (a AddrTrxsDBMgr) DBDelete(key string) error {
-	err := a.db.Delete([]byte(key), nil)
+	err := a.db.DBDelete([]byte(key))
 	if err != nil {
 		return err
 	}
 	return nil
 }
 
-func (a AddrTrxsDBMgr) DBBatch(addrTrxs []AddrTrxsPair) error {
-	batch := new(leveldb.Batch)
-	for _, addrTrx := range addrTrxs {
-		if addrTrx.AddrTrxsOp == 0 {
-			bytesValue, err := trxSeqsToBytes(addrTrx.AddrTrxsValue)
-			if err != nil {
-				return err
-			}
-			batch.Put([]byte(addrTrx.AddrTrxsKey), bytesValue)
-		} else if addrTrx.AddrTrxsOp == 1 {
-			batch.Delete([]byte(addrTrx.AddrTrxsKey))
-		} else {
-			return errors.New("AddressTrxOp type not support")
-		}
-	}
-	err := a.db.Write(batch, nil)
-	if err != nil && err.Error() != LevelDBNotFound {
-		return err
-	}
-	return nil
-}
-
-func (t *UtxoDBMgr) DBOpen(dbFile string) error {
-	var err error
-	t.db, err = leveldb.OpenFile(dbFile, nil)
+func (u *UtxoDBMgr) DBOpen(dbFile string) error {
+	u.db = new(DBCommon)
+	err := u.db.DBOpen(dbFile)
 	if err != nil {
 		return err
 	}
 	return nil
 }
 
-func (t *UtxoDBMgr) DBClose() error {
-	err := t.db.Close()
+func (u *UtxoDBMgr) DBClose() error {
+	err := u.db.DBClose()
 	if err != nil {
 		return err
 	}
 	return nil
 }
 
-func (t UtxoDBMgr) DBPut(key UtxoSource, value UtxoDetail) error {
-	bytesKey, err := utxoSrcToBytes(key)
+func (u UtxoDBMgr) DBPut(key UtxoSource, value UtxoDetail) error {
+	keyBytes, err := utxoSrcToBytes(key)
 	if err != nil {
 		return err
 	}
-	bytesValue, err := utxoDetailToBytes(value)
+	valueBytes, err := utxoDetailToBytes(value)
 	if err != nil {
 		return err
 	}
-	err = t.db.Put(bytesKey, bytesValue, nil)
+	err = u.db.DBPut(keyBytes, valueBytes)
 	if err != nil {
 		return err
 	}
 	return nil
 }
 
-func (t UtxoDBMgr) DBGet(key UtxoSource) (UtxoDetail, error) {
-	bytesKey, err := utxoSrcToBytes(key)
+func (u UtxoDBMgr) DBGet(key UtxoSource) (UtxoDetail, error) {
+	keyBytes, err := utxoSrcToBytes(key)
 	if err != nil {
 		return UtxoDetail{}, err
 	}
-	bytesValue, err := t.db.Get(bytesKey, nil)
+	valueBytes, err := u.db.DBGet(keyBytes)
 	if err != nil {
 		return UtxoDetail{}, err
 	}
-	utxoDetail, err := utxoDetailFromBytes(bytesValue)
+	utxoDetail, err := utxoDetailFromBytes(valueBytes)
 	return utxoDetail, nil
 }
 
-func (t UtxoDBMgr) DBDelete(key UtxoSource) error {
-	bytesKey, err := utxoSrcToBytes(key)
+func (u UtxoDBMgr) DBDelete(key UtxoSource) error {
+	keyBytes, err := utxoSrcToBytes(key)
 	if err != nil {
 		return err
 	}
-	err = t.db.Delete(bytesKey, nil)
+	err = u.db.DBDelete(keyBytes)
 	if err != nil {
-		return err
-	}
-	return nil
-}
-
-func (t UtxoDBMgr) DBBatch(trxUtxos []UtxoPair) error {
-	batch := new(leveldb.Batch)
-	for _, trxUtxo := range trxUtxos {
-		if trxUtxo.UtxoOp == 0 {
-			bytesKey, err := utxoSrcToBytes(trxUtxo.UtxoKey)
-			if err != nil {
-				return err
-			}
-			bytesValue, err := utxoDetailToBytes(trxUtxo.UtxoValue)
-			if err != nil {
-				return err
-			}
-			batch.Put(bytesKey, bytesValue)
-		} else if trxUtxo.UtxoOp == 1 {
-			bytesKey, err := utxoSrcToBytes(trxUtxo.UtxoKey)
-			if err != nil {
-				return err
-			}
-			batch.Delete(bytesKey)
-		} else {
-			return errors.New("TrxUtxoOp type not support")
-		}
-	}
-	err := t.db.Write(batch, nil)
-	if err != nil && err.Error() != LevelDBNotFound {
 		return err
 	}
 	return nil
 }
 
 func (t *TrxSeqDBMgr) DBOpen(dbFile string) error {
-	var err error
-	t.db, err = leveldb.OpenFile(dbFile, nil)
+	t.db = new(DBCommon)
+	err := t.db.DBOpen(dbFile)
 	if err != nil {
 		return err
 	}
@@ -283,7 +179,7 @@ func (t *TrxSeqDBMgr) DBOpen(dbFile string) error {
 }
 
 func (t *TrxSeqDBMgr) DBClose() error {
-	err := t.db.Close()
+	err := t.db.DBClose()
 	if err != nil {
 		return err
 	}
@@ -291,15 +187,15 @@ func (t *TrxSeqDBMgr) DBClose() error {
 }
 
 func (t TrxSeqDBMgr) DBPut(key uint32, value bigint.Uint256) error {
-	bytesKey, err := uint32ToBytes(key)
+	keyBytes, err := uint32ToBytes(key)
 	if err != nil {
 		return err
 	}
-	bytesValue, err := uint256ToBytes(value)
+	valueBytes, err := uint256ToBytes(value)
 	if err != nil {
 		return err
 	}
-	err = t.db.Put(bytesKey, bytesValue, nil)
+	err = t.db.DBPut(keyBytes, valueBytes)
 	if err != nil {
 		return err
 	}
@@ -307,15 +203,15 @@ func (t TrxSeqDBMgr) DBPut(key uint32, value bigint.Uint256) error {
 }
 
 func (t TrxSeqDBMgr) DBGet(key uint32) (bigint.Uint256, error) {
-	bytesKey, err := uint32ToBytes(key)
+	keyBytes, err := uint32ToBytes(key)
 	if err != nil {
 		return bigint.Uint256{}, err
 	}
-	bytesValue, err := t.db.Get(bytesKey, nil)
+	valueBytes, err := t.db.DBGet(keyBytes)
 	if err != nil {
 		return bigint.Uint256{}, err
 	}
-	ui256, err := uint256FromBytes(bytesValue)
+	ui256, err := uint256FromBytes(valueBytes)
 	if err != nil {
 		return bigint.Uint256{}, err
 	}
@@ -323,46 +219,20 @@ func (t TrxSeqDBMgr) DBGet(key uint32) (bigint.Uint256, error) {
 }
 
 func (t TrxSeqDBMgr) DBDelete(key uint32) error {
-	bytesKey, err := uint32ToBytes(key)
+	keyBytes, err := uint32ToBytes(key)
 	if err != nil {
 		return err
 	}
-	err = t.db.Delete(bytesKey, nil)
+	err = t.db.DBDelete(keyBytes)
 	if err != nil {
-		return err
-	}
-	return nil
-}
-
-func (r TrxSeqDBMgr) DBBatch(trxSeqs []TrxSeqPair) error {
-	batch := new(leveldb.Batch)
-	for _, trxSeq := range trxSeqs {
-		bytesKey, err := uint32ToBytes(trxSeq.TrxSeqKey)
-		if err != nil {
-			return err
-		}
-		if trxSeq.TrxSeqOp == 0 {
-			bytesValue, err := uint256ToBytes(trxSeq.TrxIdValue)
-			if err != nil {
-				return err
-			}
-			batch.Put(bytesKey, bytesValue)
-		} else if trxSeq.TrxSeqOp == 1 {
-			batch.Delete(bytesKey)
-		} else {
-			return errors.New("TrxSeqOp type not support")
-		}
-	}
-	err := r.db.Write(batch, nil)
-	if err != nil && err.Error() != LevelDBNotFound {
 		return err
 	}
 	return nil
 }
 
 func (r *RawTrxDBMgr) DBOpen(dbFile string) error {
-	var err error
-	r.db, err = leveldb.OpenFile(dbFile, nil)
+	r.db = new(DBCommon)
+	err := r.db.DBOpen(dbFile)
 	if err != nil {
 		return err
 	}
@@ -370,7 +240,7 @@ func (r *RawTrxDBMgr) DBOpen(dbFile string) error {
 }
 
 func (r *RawTrxDBMgr) DBClose() error {
-	err := r.db.Close()
+	err := r.db.DBClose()
 	if err != nil {
 		return err
 	}
@@ -378,11 +248,11 @@ func (r *RawTrxDBMgr) DBClose() error {
 }
 
 func (r RawTrxDBMgr) DBPut(key bigint.Uint256, value []byte) error {
-	bytesKey, err := uint256ToBytes(key)
+	keyBytes, err := uint256ToBytes(key)
 	if err != nil {
 		return err
 	}
-	err = r.db.Put(bytesKey, value, nil)
+	err = r.db.DBPut(keyBytes, value)
 	if err != nil {
 		return err
 	}
@@ -390,46 +260,24 @@ func (r RawTrxDBMgr) DBPut(key bigint.Uint256, value []byte) error {
 }
 
 func (r RawTrxDBMgr) DBGet(key bigint.Uint256) ([]byte, error) {
-	bytesKey, err := uint256ToBytes(key)
+	keyBytes, err := uint256ToBytes(key)
 	if err != nil {
-		return []byte{}, err
+		return nil, err
 	}
-	bytesValue, err := r.db.Get(bytesKey, nil)
+	valueBytes, err := r.db.DBGet(keyBytes)
 	if err != nil {
-		return []byte{}, err
+		return nil, err
 	}
-	return bytesValue, nil
+	return valueBytes, nil
 }
 
 func (r RawTrxDBMgr) DBDelete(key bigint.Uint256) error {
-	bytesKey, err := uint256ToBytes(key)
+	keyBytes, err := uint256ToBytes(key)
 	if err != nil {
 		return err
 	}
-	err = r.db.Delete(bytesKey, nil)
+	err = r.db.DBDelete(keyBytes)
 	if err != nil {
-		return err
-	}
-	return nil
-}
-
-func (r RawTrxDBMgr) DBBatch(rawTrxs []RawTrxPair) error {
-	batch := new(leveldb.Batch)
-	for _, rawTrx := range rawTrxs {
-		bytesKey, err := uint256ToBytes(rawTrx.TrxIdKey)
-		if err != nil {
-			return err
-		}
-		if rawTrx.RawTrxOp == 0 {
-			batch.Put(bytesKey, rawTrx.RawTrxDataValue)
-		} else if rawTrx.RawTrxOp == 1 {
-			batch.Delete(bytesKey)
-		} else {
-			return errors.New("RawTrxOp type not support")
-		}
-	}
-	err := r.db.Write(batch, nil)
-	if err != nil && err.Error() != LevelDBNotFound {
 		return err
 	}
 	return nil
