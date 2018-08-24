@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"github.com/mutalisk999/go-lib/src/sched/goroutine_mgr"
-	"github.com/tecbot/gorocksdb"
 	_ "net/http/pprof"
 	"os"
 	"runtime"
@@ -44,12 +43,6 @@ func appInit() error {
 	// init db config
 	if config.DBConfig.DbType == "leveldb" {
 		NotFoundError = NotFoundErrorLevelDB
-	} else if config.DBConfig.DbType == "rocksdb" {
-		NotFoundError = NotFoundErrorRocksDB
-		RocksDBCreateOpt = gorocksdb.NewDefaultOptions()
-		RocksDBCreateOpt.SetCreateIfMissing(true)
-		RocksDBReadOpt = gorocksdb.NewDefaultReadOptions()
-		RocksDBWriteOpt = gorocksdb.NewDefaultWriteOptions()
 	} else {
 		return errors.New("invalid db type")
 	}

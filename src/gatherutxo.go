@@ -171,23 +171,11 @@ func storeChainIndexState(state string) error {
 func applySlotCacheToDB(slotCache *SlotCache) error {
 	// deal addr trxs
 	for addrStr, trxSeqsMap := range slotCache.AddrTrxsAdd {
-		// deep copy trxIdsMap, in order to avoid influence for AddrTrxsAdd
-		trxSeqsMapDump := make(map[uint32]uint32)
-		for k, v := range trxSeqsMap {
-			trxSeqsMapDump[k] = v
-		}
-		trxSeqsDB, err := addrTrxsDBMgr.DBGet(addrStr)
-		if err != nil && err.Error() == NotFoundError {
-			trxSeqsDB = []uint32{}
-		}
-		for _, trxSeq := range trxSeqsDB {
-			trxSeqsMapDump[trxSeq] = 0
-		}
-		trxSeqsNew := make([]uint32, 0, len(trxSeqsMapDump))
-		for trxSeq, _ := range trxSeqsMapDump {
+		trxSeqsNew := make([]uint32, 0, len(trxSeqsMap))
+		for trxSeq, _ := range trxSeqsMap {
 			trxSeqsNew = append(trxSeqsNew, trxSeq)
 		}
-		err = addrTrxsDBMgr.DBPut(addrStr, trxSeqsNew)
+		err := addrTrxsDBMgr.DBPut(addrStr+"."+strconv.Itoa(int(startBlockHeight)), trxSeqsNew)
 		if err != nil {
 			return err
 		}

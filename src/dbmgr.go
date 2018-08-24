@@ -100,7 +100,26 @@ func (a AddrTrxsDBMgr) DBGet(key string) ([]uint32, error) {
 		return nil, err
 	}
 	trxIds, err := trxSeqsFromBytes(valueBytes)
+	if err != nil {
+		return nil, err
+	}
 	return trxIds, nil
+}
+
+func (a AddrTrxsDBMgr) DBGetPrefix(key string) ([]uint32, error) {
+	valuesBytes, err := a.db.DBGetPrefix([]byte(key))
+	if err != nil {
+		return nil, err
+	}
+	var trxSeqsAll []uint32
+	for _, valueBytes := range valuesBytes {
+		trxIds, err := trxSeqsFromBytes(valueBytes)
+		if err != nil {
+			return nil, err
+		}
+		trxSeqsAll = append(trxSeqsAll, trxIds...)
+	}
+	return trxSeqsAll, nil
 }
 
 func (a AddrTrxsDBMgr) DBDelete(key string) error {

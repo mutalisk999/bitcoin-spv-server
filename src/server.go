@@ -28,7 +28,7 @@ func (s *Service) GetTrxCount(r *http.Request, args *interface{}, reply *uint32)
 }
 
 func (s *Service) GetAddressTrxs(r *http.Request, args *string, reply *[]string) error {
-	trxSeqs, err := addrTrxsDBMgr.DBGet(*args)
+	trxSeqs, err := addrTrxsDBMgr.DBGetPrefix(*args + ".")
 	if err != nil {
 		return errors.New("address not found")
 	}
@@ -90,7 +90,7 @@ func (s *Service) GetUtxo(r *http.Request, args *UtxoSourcePrintAble, reply *Utx
 }
 
 func (s *Service) ListUnSpent(r *http.Request, args *string, reply *[]UtxoDetailPrintAble) error {
-	trxSeqs, err := addrTrxsDBMgr.DBGet(*args)
+	trxSeqs, err := addrTrxsDBMgr.DBGetPrefix(*args + ".")
 	if err != nil {
 		return errors.New("address not found")
 	}
