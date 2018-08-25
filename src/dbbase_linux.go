@@ -74,10 +74,12 @@ func (d DBCommon) DBPut(key []byte, value []byte) error {
 
 func (d DBCommon) DBGet(key []byte) ([]byte, error) {
 	if config.DBConfig.DbType == "leveldb" {
-		valueBytes, err := d.ldb.Get(key, nil)
+		value, err := d.ldb.Get(key, nil)
 		if err != nil {
 			return nil, err
 		}
+		valueBytes := make([]byte, len(value))
+		copy(valueBytes[0:], value)
 		return valueBytes, nil
 	} else if config.DBConfig.DbType == "rocksdb" {
 		value, err := d.rdb.Get(RocksDBReadOpt, key)
