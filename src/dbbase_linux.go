@@ -98,7 +98,9 @@ func (d DBCommon) DBGetPrefix(key []byte) ([][]byte, error) {
 	if config.DBConfig.DbType == "leveldb" {
 		iter := d.ldb.NewIterator(util.BytesPrefix(key), nil)
 		for iter.Next() {
-			valuesBytes = append(valuesBytes, iter.Value())
+			valueBytes := make([]byte, len(iter.Value()))
+			copy(valueBytes[0:], iter.Value())
+			valuesBytes = append(valuesBytes, valueBytes)
 		}
 		iter.Release()
 		err := iter.Error()
@@ -110,7 +112,9 @@ func (d DBCommon) DBGetPrefix(key []byte) ([][]byte, error) {
 		iter := d.rdb.NewIterator(RocksDBReadOpt)
 		for iter.Seek(key); iter.Valid() && bytes.HasPrefix(iter.Key().Data(), key); iter.Next() {
 			k, v := iter.Key(), iter.Value()
-			valuesBytes = append(valuesBytes, v.Data())
+			valueBytes := make([]byte, len(iter.Value()))
+			copy(valueBytes[0:], iter.Value())
+			valuesBytes = append(valuesBytes, valueBytes)
 			k.Free()
 			v.Free()
 		}

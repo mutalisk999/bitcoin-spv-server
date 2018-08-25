@@ -113,11 +113,11 @@ func (a AddrTrxsDBMgr) DBGetPrefix(key string) ([]uint32, error) {
 	}
 	var trxSeqsAll []uint32
 	for _, valueBytes := range valuesBytes {
-		trxIds, err := trxSeqsFromBytes(valueBytes)
+		trxSeqs, err := trxSeqsFromBytes(valueBytes)
 		if err != nil {
 			return nil, err
 		}
-		trxSeqsAll = append(trxSeqsAll, trxIds...)
+		trxSeqsAll = append(trxSeqsAll, trxSeqs...)
 	}
 	return trxSeqsAll, nil
 }

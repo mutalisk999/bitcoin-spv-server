@@ -66,7 +66,9 @@ func (d DBCommon) DBGetPrefix(key []byte) ([][]byte, error) {
 	if config.DBConfig.DbType == "leveldb" {
 		iter := d.ldb.NewIterator(util.BytesPrefix(key), nil)
 		for iter.Next() {
-			valuesBytes = append(valuesBytes, iter.Value())
+			valueBytes := make([]byte, len(iter.Value()))
+			copy(valueBytes[0:], iter.Value())
+			valuesBytes = append(valuesBytes, valueBytes)
 		}
 		iter.Release()
 		err := iter.Error()
