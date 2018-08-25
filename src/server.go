@@ -35,7 +35,8 @@ func (s *Service) GetAddressTrxs(r *http.Request, args *string, reply *[]string)
 	for _, trxSeq := range trxSeqs {
 		trxId, err := trxSeqDBMgr.DBGet(trxSeq)
 		if err != nil {
-			return errors.New("trx sequence not found")
+			//return errors.New("trx sequence not found")
+			continue
 		}
 		*reply = append(*reply, trxId.GetHex())
 	}
@@ -97,11 +98,13 @@ func (s *Service) ListUnSpent(r *http.Request, args *string, reply *[]UtxoDetail
 	for _, trxSeq := range trxSeqs {
 		trxId, err := trxSeqDBMgr.DBGet(trxSeq)
 		if err != nil {
-			return errors.New("trx sequence not found")
+			//return errors.New("trx sequence not found")
+			continue
 		}
 		bytesRawTrx, err := rawTrxDBMgr.DBGet(trxId)
 		if err != nil {
-			return errors.New("transaction id not found")
+			//return errors.New("transaction id not found")
+			continue
 		}
 		var trx transaction.Transaction
 		bytesBuf := bytes.NewBuffer(bytesRawTrx)
@@ -116,7 +119,7 @@ func (s *Service) ListUnSpent(r *http.Request, args *string, reply *[]UtxoDetail
 			utxoSource.Vout = uint32(i)
 			utxoDetail, err := utxoDBMgr.DBGet(utxoSource)
 			if err != nil {
-				return errors.New("utxo source not found")
+				continue
 			}
 			utxoDetailPrintAble := utxoDetail.GetUtxoDetailPrintAble()
 			*reply = append(*reply, utxoDetailPrintAble)
