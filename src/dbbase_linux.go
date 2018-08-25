@@ -88,7 +88,9 @@ func (d DBCommon) DBGet(key []byte) ([]byte, error) {
 		if value.Data() == nil {
 			return nil, errors.New(NotFoundErrorRocksDB)
 		}
-		return value.Data(), nil
+		valueBytes := make([]byte, len(value.Data()))
+		copy(valueBytes[0:], value.Data())
+		return valueBytes, nil
 	}
 	return nil, errors.New("invalid db type")
 }
