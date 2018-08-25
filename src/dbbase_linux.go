@@ -112,8 +112,8 @@ func (d DBCommon) DBGetPrefix(key []byte) ([][]byte, error) {
 		iter := d.rdb.NewIterator(RocksDBReadOpt)
 		for iter.Seek(key); iter.Valid() && bytes.HasPrefix(iter.Key().Data(), key); iter.Next() {
 			k, v := iter.Key(), iter.Value()
-			valueBytes := make([]byte, len(iter.Value()))
-			copy(valueBytes[0:], iter.Value())
+			valueBytes := make([]byte, len(iter.Value().Data()))
+			copy(valueBytes[0:], iter.Value().Data())
 			valuesBytes = append(valuesBytes, valueBytes)
 			k.Free()
 			v.Free()
