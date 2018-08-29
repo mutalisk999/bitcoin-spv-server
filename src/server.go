@@ -27,6 +27,15 @@ func (s *Service) GetTrxCount(r *http.Request, args *interface{}, reply *uint32)
 	return nil
 }
 
+func (s *Service) GetTrxIdBySeq(r *http.Request, args *uint32, reply *string) error {
+	trxId, err := trxSeqDBMgr.DBGet(*args)
+	if err != nil {
+		return errors.New("trx seq not found")
+	}
+	*reply = trxId.GetHex()
+	return nil
+}
+
 func (s *Service) GetAddressTrxs(r *http.Request, args *string, reply *[]string) error {
 	trxSeqs, err := addrTrxsDBMgr.DBGetPrefix(*args + ".")
 	if err != nil {
