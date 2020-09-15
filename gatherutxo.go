@@ -388,7 +388,7 @@ func dealWithRawBlock(blockHeight uint32, rawBlockData *string) error {
 	bytesBuf := bytes.NewBuffer(blockBytes)
 	bufReader := io.Reader(bytesBuf)
 	var blockNew block.Block
-	blockNew.UnPack(bufReader)
+	_ = blockNew.UnPack(bufReader)
 	for i := 0; i < len(blockNew.Vtx); i++ {
 		isCoinBase := false
 		if i == 0 {

@@ -127,7 +127,7 @@ func appCmd() error {
 			quitFlag = true
 			break
 		}
-		stdoutWriter.Flush()
+		_ = stdoutWriter.Flush()
 		strLine, err := stdinReader.ReadString('\n')
 		if err != nil {
 			quitFlag = true
@@ -165,11 +165,11 @@ func appCmd() error {
 	<-quitChan
 
 	// sync and close
-	globalConfigDBMgr.DBClose()
-	addrTrxsDBMgr.DBClose()
-	utxoDBMgr.DBClose()
-	trxSeqDBMgr.DBClose()
-	rawTrxDBMgr.DBClose()
+	_ = globalConfigDBMgr.DBClose()
+	_ = addrTrxsDBMgr.DBClose()
+	_ = utxoDBMgr.DBClose()
+	_ = trxSeqDBMgr.DBClose()
+	_ = rawTrxDBMgr.DBClose()
 
 	return nil
 }

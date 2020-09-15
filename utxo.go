@@ -32,7 +32,7 @@ func (u *UtxoSource) FromStreamString(streamStr string) error {
 		return errors.New("invalid stream string with wrong length")
 	}
 	var err error
-	u.TrxId.SetData([]byte(streamStr[0:32]))
+	_ = u.TrxId.SetData([]byte(streamStr[0:32]))
 	u.Vout, err = uint32FromBytes([]byte(streamStr[32:36]))
 	if err != nil {
 		return err
@@ -78,7 +78,7 @@ func (u *UtxoSource) GetUtxoSourcePrintAble() UtxoSourcePrintAble {
 
 func (u *UtxoSourcePrintAble) GetUtxoSource() UtxoSource {
 	var utxoSource UtxoSource
-	utxoSource.TrxId.SetHex(u.TrxId)
+	_ = utxoSource.TrxId.SetHex(u.TrxId)
 	utxoSource.Vout = u.Vout
 	return utxoSource
 }

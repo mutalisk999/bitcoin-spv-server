@@ -144,11 +144,11 @@ func rpcServer(goroutine goroutine_mgr.Goroutine, args ...interface{}) {
 	rpcServer.RegisterCodec(json.NewCodec(), "application/json;charset=UTF-8")
 
 	rpcService := new(Service)
-	rpcServer.RegisterService(rpcService, "")
+	_ = rpcServer.RegisterService(rpcService, "")
 
 	urlRouter := mux.NewRouter()
 	urlRouter.Handle("/", rpcServer)
-	http.ListenAndServe(config.RpcServerConfig.RpcListenEndPoint, urlRouter)
+	_ = http.ListenAndServe(config.RpcServerConfig.RpcListenEndPoint, urlRouter)
 }
 
 func startRpcServer() uint64 {
